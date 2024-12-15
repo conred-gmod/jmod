@@ -141,15 +141,6 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 				-- Table starting with RAND will take a random value from the rest of the table
 				-- A table with the setup {class, number} will spawn that number of class
 				-- If you add a second number to that table, if the class is an EZ resource, it will attempt to set the resource to that number
-				["arms"] = {
-					description = "buncha random guns, good luck getting what you want.",
-					category = "Weapons",
-					results = {
-						{"RAND", "ent_jack_gmod_ezweapon_pistol", "ent_jack_gmod_ezweapon_ar", "ent_jack_gmod_ezweapon_bar", "ent_jack_gmod_ezweapon_br", "ent_jack_gmod_ezweapon_car", "ent_jack_gmod_ezweapon_dmr", "ent_jack_gmod_ezweapon_sr", "ent_jack_gmod_ezweapon_amsr", "ent_jack_gmod_ezweapon_sas", "ent_jack_gmod_ezweapon_pas", "ent_jack_gmod_ezweapon_bas", "ent_jack_gmod_ezweapon_pocketpistol", "ent_jack_gmod_ezweapon_plinkingpistol", "ent_jack_gmod_ezweapon_machinepistol", "ent_jack_gmod_ezweapon_smg", "ent_jack_gmod_ezweapon_lmg", "ent_jack_gmod_ezweapon_mmg", "ent_jack_gmod_ezweapon_magrevolver", "ent_jack_gmod_ezweapon_magpistol", "ent_jack_gmod_ezweapon_revolver", "ent_jack_gmod_ezweapon_shotrevolver", "ent_jack_gmod_ezweapon_lac", "ent_jack_gmod_ezweapon_ssr", "ent_jack_gmod_ezweapon_amr", "ent_jack_gmod_ezweapon_fas", "ent_jack_gmod_ezweapon_gl", "ent_jack_gmod_ezweapon_mgl", "ent_jack_gmod_ezweapon_rocketlauncher", "ent_jack_gmod_ezweapon_mrl", 3},
-						{"ent_jack_gmod_ezammo", 2},
-						"ent_jack_gmod_ezmunitions"
-					}
-				},
 				["armor"] = {
 					description = "A random collection of armor*.\n\n *Jackarunda Industries outsources package sorting. We are not liable for any unusual items.",
 					category = "Apparel",
