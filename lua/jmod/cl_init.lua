@@ -285,49 +285,6 @@ hook.Add("Think", "JMOD_CLIENT_THINK", function()
 	JMod.Wind = GetGlobal2Vector("JMod_Wind", JMod.Wind)
 end)
 
-local WDir = VectorRand()
-
-hook.Add("CreateMove", "ParachuteShake", function(cmd)
-	local Ply = LocalPlayer()
-	if not Ply:Alive() then return end
-
-	if Ply:GetNW2Bool("EZparachuting", false) then
-		local Amt, Sporadicness, FT = 30, 20, FrameTime()
-
-		if Ply:KeyDown(IN_FORWARD) then
-			Sporadicness = Sporadicness * 1.5
-			Amt = Amt * 2
-		end
-
-		local S, EAng = .05, cmd:GetViewAngles()
-		--(JMod.Wind + EAng:Forward())
-		WDir = (WDir + FT * VectorRand() * Sporadicness):GetNormalized()
-		EAng.pitch = math.NormalizeAngle(EAng.pitch + math.sin(RealTime() * 2) * 0.02)
-		Ply.LerpedYaw = math.ApproachAngle(Ply.LerpedYaw, EAng.y, FT * 120)
-		EAng.yaw = Ply.LerpedYaw + math.NormalizeAngle(WDir.x * FT * Amt * S)
-		cmd:SetViewAngles(EAng)
-	else
-		Ply.LerpedYaw = cmd:GetViewAngles().y
-	end
-end)
-
-hook.Add("CreateMove", "RocketSpeen", function(cmd)
-	local Ply = LocalPlayer()
-	if not Ply:Alive() then return end
-
-	if Ply:GetNW2Bool("EZrocketSpin", false) then
-		local FT = FrameTime()
-
-		local Spin, EAng = 1200, cmd:GetViewAngles()
-		local WDir = Ply:GetVelocity():GetNormalized()
-		Ply.LerpedYaw = math.ApproachAngle(Ply.LerpedYaw, EAng.y, FT * 120)
-		EAng.yaw = Ply.LerpedYaw + math.NormalizeAngle(WDir.x * Spin * FT)
-		cmd:SetViewAngles(EAng)
-	else
-		Ply.LerpedYaw = cmd:GetViewAngles().y
-	end
-end)
-
 --[[
 	Sum=Sum+(1/FrameTime())
 	Count=Count+1
@@ -658,21 +615,11 @@ hook.Add("PostDrawTranslucentRenderables", "JMOD_PLAYEREFFECTS", function(bDepth
 
 		if not IsValid(ToolBox) then return end
 		if ToolBox:GetClass() ~= "wep_jack_gmod_eztoolbox" then return end
+		
 		local ToolboxBuild = ToolBox:GetSelectedBuild()
-		if ToolBox.EZpreview then
-		 	if ToolBox.EZpreview.Box then
-		 		if ToolboxBuild ~= "" then
-		 			local Filter = {ply}
-		 			for k, v in pairs(ents.FindByClass("npc_bullseye")) do
-		 				table.insert(Filter, v)
-		 			end
-		 			local Tr = util.QuickTrace(ply:GetShootPos(), ply:GetAimVector() * 200 * math.Clamp((ToolBox.CurrentBuildSize or 1), .5, 100), Filter)
-		 			-- this trace code ^ is stolen from the toolbox, had to filter out ply to get a correct trace
-		 																																											--HSVToColor( CurTime() * 50 % 360, 1, 1 ) :troll:
-					local DisplayAng = (ToolBox.EZpreview.SpawnAngles or Angle(0, 0, 0)) + Angle(0, ply:EyeAngles().y, 0)
-		 			render.DrawWireframeBox(Tr.HitPos + Tr.HitNormal * 20 * (ToolBox.EZpreview.SizeScale or 1), DisplayAng, ToolBox.EZpreview.Box.mins, ToolBox.EZpreview.Box.maxs, Translucent, true)
-		 		end
-		 	elseif ToolboxBuild == "EZ Nail" then
+		local PreviewData = ToolBox.EZpreview
+		if PreviewData then
+		 	if ToolboxBuild == "EZ Nail" then
 		 		local Pos, Vec = ply:GetShootPos(), ply:GetAimVector()
 
 		 		local Tr1 = util.QuickTrace(Pos, Vec * 80, {ply})
@@ -725,7 +672,26 @@ hook.Add("PostDrawTranslucentRenderables", "JMOD_PLAYEREFFECTS", function(bDepth
 
 		 			render.DrawWireframeBox(Tr1.HitPos - Dir * 20, Dir:Angle(), Vector(21.5,.5,.5), Vector(-0,-.5,-.5), color_white, true)
 		 		end
-		 	end
+			elseif PreviewData.Box then
+				if ToolboxBuild ~= "" then
+				local Ent, Pos, Norm = NULL, nil, nil, nil
+				if ToolBox.DetermineBuildPos then
+					Ent, Pos, Norm = ToolBox:DetermineBuildPos()
+				else
+					local Filter = {ply}
+					for k, v in pairs(ents.FindByClass("npc_bullseye")) do
+						table.insert(Filter, v)
+					end
+					local Tr = util.QuickTrace(ply:GetShootPos(), ply:GetAimVector() * 200 * math.Clamp((ToolBox.CurrentBuildSize or 1), .5, 100), Filter)
+					Ent, Pos, Norm = Tr.Entity, Tr.HitPos, Tr.HitNormal
+					-- this trace code ^ is stolen from the toolbox, had to filter out ply to get a correct trace
+				end
+																																													--HSVToColor( CurTime() * 50 % 360, 1, 1 ) :troll:
+				local DisplayAng = (PreviewData.SpawnAngles or Angle(0, 0, 0)) + Angle(0, ply:EyeAngles().y, 0)
+				local FinalPos = Pos
+					render.DrawWireframeBox(FinalPos, DisplayAng, PreviewData.Box.mins, PreviewData.Box.maxs, Translucent, true)
+				end
+			end
 		end
 	end
 end)

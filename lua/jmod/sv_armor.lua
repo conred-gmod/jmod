@@ -464,7 +464,7 @@ function JMod.RemoveArmorByID(ply, ID, broken)
 		Ent = ents.Create(Specs.ent)
 		Ent:SetPos(ply:GetShootPos() + ply:GetAimVector() * 30 + VectorRand() * math.random(1, 20))
 		Ent:SetAngles(AngleRand())
-		Ent.ArmorDurability = Info.dur
+		Ent.Durability = Info.dur
 
 		if Info.chrg then
 			Ent.ArmorCharges = table.FullCopy(Info.chrg)
@@ -627,7 +627,7 @@ end
 
 net.Receive("JMod_Inventory", function(ln, ply)
 	if not ply:Alive() then return end
-	local ActionType = net.ReadInt(8) -- 1: Remove armor | 2: Toggle armor | 3: Repair armor | 4: Recharge armor
+	local ActionType = net.ReadInt(8) -- 1: Remove armor | 2: Toggle armor | 3: Repair armor | 4: Recharge armor | 5: Color armor
 	local ID = net.ReadString()
 
 	if ActionType == 1 then
@@ -656,10 +656,14 @@ net.Receive("JMod_Inventory", function(ln, ply)
 			BuildRecipe = JMod.BackupArmorRepairRecipes[ItemData.name]
 		end
 
+		local AvailableResources = {}
 		if BuildRecipe then
 			local DamagedFraction = 1 - (ItemData.dur / ItemInfo.dur)
-
 			for resourceName, resourceAmt in pairs(BuildRecipe) do
+				-- If it requires things it also consumes, like fuel, gas and chemicals, we shouldn't require those for repair
+				if ItemInfo.chrg[resourceName] then
+					resourceAmt = 0
+				end
 				local RequiredAmt = math.floor(resourceAmt * DamagedFraction * 1.2) -- 20% efficiency penalty for not needing a workbench
 
 				if RequiredAmt > 0 then
@@ -670,7 +674,8 @@ net.Receive("JMod_Inventory", function(ln, ply)
 			RepairStatus = 1
 
 			---
-			if JMod.HaveResourcesToPerformTask(nil, nil, RepairRecipe, ply) then
+			AvailableResources = JMod.CountResourcesInRange(nil, nil, ply)
+			if JMod.HaveResourcesToPerformTask(nil, nil, RepairRecipe, ply, AvailableResources) then
 				RepairStatus = 2
 				JMod.ConsumeResourcesInRange(BuildRecipe, nil, nil, ply)
 				ItemData.dur = ItemInfo.dur
@@ -683,11 +688,13 @@ net.Receive("JMod_Inventory", function(ln, ply)
 			local mats = ""
 
 			for k, v in pairs(RepairRecipe) do
+				local AmountNeeded = math.max(0, v - (AvailableResources[k] or 0))
 				if next(RepairRecipe, k) ~= nil then
-					mats = mats .. k .. ", "
+					mats = mats .. k .. " x" .. tostring(AmountNeeded) .. ", "
 				else
-					mats = mats .. k
+					mats = mats .. k .. " x" .. tostring(AmountNeeded)
 				end
+
 			end
 
 			ply:PrintMessage(HUD_PRINTCENTER, "Missing resources for repair, need: \n" .. mats)
@@ -767,11 +774,20 @@ net.Receive("JMod_Inventory", function(ln, ply)
 			end
 		end
 	elseif ActionType == 5 then
-		local ItemData = ply.EZarmor.items[ID]
-		local ItemInfo = JMod.ArmorTable[ItemData.name]
-		if not ItemInfo["clrForced"] then
-			local NewColor = net.ReadColor()
-			ply.EZarmor.items[ID].col = {r = NewColor.r, g = NewColor.g, b = NewColor.b, a = 255}
+		local NewColor = net.ReadColor()
+		if ID == "" then
+			for k, v in pairs(ply.EZarmor.items) do
+				local ItemInfo = JMod.ArmorTable[v.name]
+				if not ItemInfo["clrForced"] then
+					ply.EZarmor.items[k].col = {r = NewColor.r, g = NewColor.g, b = NewColor.b, a = 255}
+				end
+			end
+		else
+			local ItemData = ply.EZarmor.items[ID]
+			local ItemInfo = JMod.ArmorTable[ItemData.name]
+			if not ItemInfo["clrForced"] then
+				ply.EZarmor.items[ID].col = {r = NewColor.r, g = NewColor.g, b = NewColor.b, a = 255}
+			end
 		end
 	end
 

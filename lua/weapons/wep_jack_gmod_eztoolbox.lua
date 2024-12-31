@@ -284,11 +284,11 @@ function SWEP:UpdateNextIdle()
 end
 
 function SWEP:GetEZsupplies(resourceType, getter)
-	local BuildSizeMult = self.CurrentBuildSize or 0
+	local BuildSizeMult = self.CurrentBuildSize or 1
 	if IsValid(getter) and getter == self then BuildSizeMult = 0 end
 	local AvailableResources = {
-		[JMod.EZ_RESOURCE_TYPES.POWER] = math.max(math.floor(self:GetElectricity() - 4 * BuildSizeMult), 0),
-		[JMod.EZ_RESOURCE_TYPES.GAS] = math.max(math.floor(self:GetGas() - 3 * BuildSizeMult), 0)
+		[JMod.EZ_RESOURCE_TYPES.POWER] = self:GetElectricity(),
+		[JMod.EZ_RESOURCE_TYPES.GAS] = self:GetGas()
 	}
 	if resourceType then
 		if AvailableResources[resourceType] and AvailableResources[resourceType] > 0 then
@@ -305,13 +305,68 @@ function SWEP:SetEZsupplies(typ, amt, setter)
 	if not SERVER then  return end
 	local ResourceSetMethod = self["Set"..JMod.EZ_RESOURCE_TYPE_METHODS[typ]]
 	if ResourceSetMethod then
-		ResourceSetMethod(self, amt)
+		ResourceSetMethod(self, math.Clamp(amt, 0, self["Max"..JMod.EZ_RESOURCE_TYPE_METHODS[typ]] or 100))
 	end
+end
+
+function SWEP:DetermineBuildPos()
+	local BuildInfo = self.EZpreview
+	BuildInfo.SpawnAngles = BuildInfo.SpawnAngles or Angle(0, 0, 0)
+	local Ent, Pos, Norm = self:WhomIlookinAt(math.max((BuildInfo.sizeScale or self.CurrentBuildSize) * 30, 100))
+	if not BuildInfo then return Ent, Pos, Norm, BuildInfo.SpawnAngles end
+
+	local BuildBoundingBox = {
+		mins = Vector(-1, -1, -1),
+		maxs = Vector(1, 1, 1)
+	}
+	if BuildInfo.Box then
+		BuildBoundingBox = BuildInfo.Box
+	elseif BuildInfo.sizeScale then
+		BuildBoundingBox.mins = BuildBoundingBox.mins * BuildInfo.sizeScale
+		BuildBoundingBox.maxs = BuildBoundingBox.maxs * BuildInfo.sizeScale
+	end
+
+	local SpawnAngle = BuildInfo.SpawnAngles:GetCopy()
+	local ForwardDir = SpawnAngle:Forward()
+	local ForwardExtent = math.max(math.abs(ForwardDir.x * BuildBoundingBox.maxs.x), math.abs(ForwardDir.x * BuildBoundingBox.mins.x))
+	ForwardExtent = math.max(ForwardExtent, math.abs(ForwardDir.y * BuildBoundingBox.maxs.y))
+	ForwardExtent = math.max(ForwardExtent, math.abs(ForwardDir.y * BuildBoundingBox.mins.y))
+
+	debugoverlay.Cross(Pos, 5, .2, Color(255, 255, 255), true)
+	local WallTrDir = Angle(0, self.Owner:GetAngles().y, 0):Forward()
+	local WallTrace = util.TraceLine({
+		start = Pos,
+		endpos = Pos + WallTrDir * ForwardExtent,
+		filter = self.Owner
+	})
+
+	if WallTrace.Hit then
+		debugoverlay.Cross(WallTrace.HitPos, 5, .2, Color(255, 0, 0), true)
+		local Difference = Pos - WallTrace.HitPos
+		Difference.z = 0
+		Pos = Pos - WallTrDir * (ForwardExtent - Difference:Length())
+		Norm = WallTrace.HitNormal
+	end
+
+	local FloorTrace = util.TraceLine({
+		start = Pos,
+		endpos = Pos - Vector(0, 0, math.abs(BuildBoundingBox.mins.z)),
+		filter = self.Owner
+	})
+
+	if FloorTrace.Hit then
+		local Difference = Pos - FloorTrace.HitPos
+		debugoverlay.Cross(FloorTrace.HitPos, 5, .2, Color(200, 255, 0), true)
+		Pos = Pos + Vector(0, 0, math.abs(BuildBoundingBox.mins.z) - Difference.z)
+		Norm = FloorTrace.HitNormal
+	end
+
+	return Ent, Pos, Norm, SpawnAngle + Angle(0, self.Owner:GetAngles().y, 0)
 end
 
 function SWEP:BuildItem(selectedBuild)
 	local Built = false
-	local Ent, Pos, Norm = self:WhomIlookinAt()
+	local Ent, Pos, Norm, SpawnAngle = self:DetermineBuildPos()
 	local BuildInfo = self.Craftables[selectedBuild]
 	if not BuildInfo then return end
 	local MaxElecConsume, MaxGasConsume = 40, 30
@@ -335,7 +390,8 @@ function SWEP:BuildItem(selectedBuild)
 
 			return
 		end
-		JMod.ConsumeResourcesInRange(Reqs, ConsumePos, nil, self, false, nil, mult or 1)
+		local SuccessfulConsume = JMod.ConsumeResourcesInRange(Reqs, ConsumePos, nil, self, false, nil, mult or 1)
+
 		Built = true
 		local BuildSteps = math.ceil(20 * (BuildInfo.sizeScale or 1))
 
@@ -357,7 +413,7 @@ function SWEP:BuildItem(selectedBuild)
 							local FuncName = StringParts[2]
 
 							if JMod.LuaConfig and JMod.LuaConfig.BuildFuncs and JMod.LuaConfig.BuildFuncs[FuncName] then
-								JMod.LuaConfig.BuildFuncs[FuncName](self.Owner, Pos + Norm * 200 * (BuildInfo.sizeScale or 1), Angle(0, self.Owner:EyeAngles().y, 0))
+								JMod.LuaConfig.BuildFuncs[FuncName](self.Owner, Pos, SpawnAngle)
 							else
 								print("JMOD TOOLBOX ERROR: JMod.LuaConfig is missing, corrupt, or doesn't have an entry for that build function")
 							end
@@ -366,11 +422,19 @@ function SWEP:BuildItem(selectedBuild)
 							if string.Right(Class, 4) == ".mdl" then
 								Ent = ents.Create("prop_physics")
 								Ent:SetModel(Class)
+								timer.Simple(0, function()
+									if IsValid(Ent) and IsValid(Ent:GetPhysicsObject()) then
+										if BuildInfo.mass then
+											Ent:GetPhysicsObject():SetMass(BuildInfo.mass)
+										end
+										Ent:GetPhysicsObject():Sleep()
+									end
+								end)
 							else
 								Ent = ents.Create(Class)
 							end
-							Ent:SetPos(Pos + Norm * 200 * (BuildInfo.sizeScale or 1))
-							Ent:SetAngles(Angle(0, self.Owner:EyeAngles().y, 0))
+							Ent:SetPos(Pos)
+							Ent:SetAngles(SpawnAngle)
 							JMod.SetEZowner(Ent, self.Owner)
 							Ent:SetCreator(self.Owner)
 							Ent:Spawn()
@@ -410,7 +474,7 @@ function SWEP:BuildItem(selectedBuild)
 	if not Built then
 		self:Msg("missing supplies for build")
 	else
-		self:BuildEffect(Pos, selectedBuild, not Sound)
+		self:BuildEffect(Pos + Vector(0, 0, 5), selectedBuild, not Sound)
 	end
 	
 	return Built
@@ -424,7 +488,7 @@ function SWEP:PrimaryAttack()
 
 	if SERVER then
 		local Built, Upgraded, SelectedBuild = false, false, self:GetSelectedBuild()
-		local Ent, Pos, Norm = self:WhomIlookinAt()
+		local Ent, Pos, Norm = self:WhomIlookinAt(100)
 
 		if SelectedBuild and SelectedBuild ~= "" then
 			Built = self:BuildItem(SelectedBuild)
@@ -663,12 +727,16 @@ function SWEP:TryLoadResource(typ, amt)
 
 	for _, v in pairs(self.EZconsumes) do
 		if typ == v then
-			local CurAmt = (self:GetEZsupplies(typ, self) or 0) + 8 * (self.CurrentBuildSize or 0)
+			local CurAmt = self:GetEZsupplies(typ, self) or 0
 			local Take = math.min(amt, self.MaxElectricity - CurAmt)
 			
 			if Take > 0 then
 				self:SetEZsupplies(typ, CurAmt + Take)
-				sound.Play("snds_jack_gmod/gas_load.ogg", self:GetPos(), 65, math.random(90, 110))
+				if typ == JMod.EZ_RESOURCE_TYPES.POWER then
+					sound.Play("snd_jack_turretbatteryload.ogg", self.Owner:GetShootPos(), 65, math.random(90, 110))
+				elseif typ == JMod.EZ_RESOURCE_TYPES.GAS then
+					sound.Play("snds_jack_gmod/gas_load.ogg", self.Owner:GetShootPos(), 65, math.random(90, 110))
+				end
 				Accepted = Take
 			end
 		end
@@ -704,14 +772,15 @@ function SWEP:UpgradeEffect(pos, scale, suppressSound)
 	end
 end
 
-function SWEP:WhomIlookinAt()
+function SWEP:WhomIlookinAt(dist)
+	dist = dist or 100
 	local Filter = {self, self.Owner}
 
 	for k, v in pairs(ents.FindByClass("npc_bullseye")) do
 		table.insert(Filter, v)
 	end
 
-	local Tr = util.QuickTrace(self.Owner:GetShootPos(), self.Owner:GetAimVector() * 200 * math.Clamp(self.CurrentBuildSize, .5, 100), Filter)
+	local Tr = util.QuickTrace(self.Owner:GetShootPos(), self.Owner:GetAimVector() * dist, Filter)
 
 	return Tr.Entity, Tr.HitPos, Tr.HitNormal
 end
@@ -839,7 +908,7 @@ function SWEP:Think()
 		self:SetHoldType("fist")
 
 		if self.Owner:KeyDown(IN_ATTACK2) then
-			if self.NextTaskProgress < Time then
+			if SERVER and (self.NextTaskProgress < Time) then
 				self.NextTaskProgress = Time + .6
 				local Alt = self.Owner:KeyDown(JMod.Config.General.AltFunctionKey)
 				local Task = (Alt and "loosen") or "salvage"

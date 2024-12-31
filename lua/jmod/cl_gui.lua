@@ -764,20 +764,20 @@ net.Receive("JMod_EZtoolbox", function()
 		return JMod.HaveResourcesToPerformTask(ent:GetPos(), 150, info.craftingReqs, ent, LocallyAvailableResources) 
 	end, 
 	function(name, info, ply, ent)-- click func
-		net.Start("JMod_EZtoolbox")
-		net.WriteEntity(ent)
-		net.WriteString(name)
-		net.SendToServer()
 
 		-- wireframe preview
 		ent.EZpreview = {}
-		local StringParts = string.Explode(" ", info["results"])																	  
+		local StringParts = string.Explode(" ", info["results"])	
+		local Ang = nil 
+		if info.spawnRotation then
+			Ang = Angle(0, info.spawnRotation, 0)
+		end															  
 		if StringParts[1] and (StringParts[1] == "FUNC") then
 			if not info.sizeScale or (StringParts[2] == "EZnail") or (StringParts[2] == "EZbolt") then
-				ent.EZpreview = {Box = nil} --No way to tell size
+				ent.EZpreview = {Box = nil, sizeScale = 1, SpawnAngles = Ang or Angle(0, 0, 0)} --No way to tell size
 			else
 				local ScaledMinMax = Vector(info.sizeScale * 10, info.sizeScale * 10, info.sizeScale * 10)
-				ent.EZpreview = {Box = {mins = -ScaledMinMax, maxs = ScaledMinMax}, SizeScale = info.sizeScale}
+				ent.EZpreview = {Box = {mins = -ScaledMinMax, maxs = ScaledMinMax}, sizeScale = info.sizeScale, SpawnAngles = Ang or Angle(0, 0, 0)}
 			end
 		else
 			local temp_ent
@@ -798,8 +798,8 @@ net.Receive("JMod_EZtoolbox", function()
 			temp_ent:SetNoDraw(true)
 			temp_ent:Spawn()									-- have to do this to get an accurate bounding box
 			local Min, Max = temp_ent:OBBMaxs(), temp_ent:OBBMins() 		-- couldn't find a better way
-			local Ang = (temp_ent.JModPreferredCarryAngles and temp_ent.JModPreferredCarryAngles) or Angle(0, 0, 0)
-			
+			Ang = Ang or (temp_ent.JModPreferredCarryAngles and temp_ent.JModPreferredCarryAngles)
+
 			if Min:IsZero() and Max:IsZero() then
 				if info.sizeScale then
 					local ScaledMinMax = Vector(info.sizeScale * 10, info.sizeScale * 10, info.sizeScale * 10)
@@ -809,10 +809,18 @@ net.Receive("JMod_EZtoolbox", function()
 					Min, Max = temp_ent.Mdl:GetModelBounds()
 				end
 			end
+			local OriginDiff = temp_ent:LocalToWorld(temp_ent:OBBCenter()) - temp_ent:GetPos()
+			Min = Min - OriginDiff
+			Max = Max - OriginDiff
 			SafeRemoveEntityDelayed(temp_ent, 0)
 
-			ent.EZpreview = {Box = {mins = Min, maxs = Max}, SizeScale = info.sizeScale and info.sizeScale, SpawnAngles = Ang}
+			ent.EZpreview = {Box = {mins = Min, maxs = Max}, sizeScale = info.sizeScale and info.sizeScale, SpawnAngles = Ang or Angle(0, 0, 0)}
 		end
+		net.Start("JMod_EZtoolbox")
+			net.WriteEntity(ent)
+			net.WriteString(name)
+			net.WriteTable(ent.EZpreview)
+		net.SendToServer()
 	end, 
 	function(parent) -- side panel func
 		local W, H, Myself = parent:GetWide(), parent:GetTall(), LocalPlayer()
@@ -863,8 +871,8 @@ net.Receive("JMod_EZworkbench", function()
 		local ResourceScroller = vgui.Create("DScrollPanel", parent)
 		ResourceScroller:SetSize(W - 20, H - 20)
 		ResourceScroller:SetPos(10, 10)
+		ResourceScroller:DockMargin(0, 5, 0, 0)
 		ResourceScroller:Dock(FILL)
-		ResourceScroller:DockMargin(0, 0, 0, 0)
 		ResourceScroller:SetPaintBackground(false)
 		ResourceScroller.VerticalScrollbar = true
 		ResourceScroller.HorizontalScrollbar = false
@@ -880,6 +888,28 @@ net.Receive("JMod_EZworkbench", function()
 				JMod.StandardResourceDisplay(k, v, nil, w * .55, h * .5, 30, false, "JMod-Stencil-XS")
 			end
 			ResourcePanel:SetTooltip(k .. " x" .. v)
+		end
+
+		if Bench:GetClass() == "ent_jack_gmod_ezprimitivebench" then
+			local ScrapButton = vgui.Create("DButton", parent)
+			ScrapButton:SetText("")
+			ScrapButton:SetSize(W - 20, 40)
+			ScrapButton:SetPos(10, H - 30)
+			ScrapButton:DockMargin(1, 5, 1, 5)
+			ScrapButton:Dock(BOTTOM)
+			ScrapButton.DoClick = function()
+				net.Start("JMod_EZworkbench")
+					net.WriteEntity(Bench)
+					net.WriteString("JMOD_SCRAPINV")
+				net.SendToServer()
+				parent:GetParent():Close()
+			end
+			ScrapButton:SetTooltip("Salvages the props in your Inventory")
+			function ScrapButton:Paint(w, h)
+				surface.SetDrawColor(0, 0, 0, 50)
+				surface.DrawRect(0, 0, w, h)
+				draw.SimpleText("SALVAGE INVENTORY PROPS", "JMod-Stencil-XS", w * .5, h * .5, TextColors.ButtonTextBright, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+			end
 		end
 	end, Multiplier)
 end)
@@ -1125,6 +1155,8 @@ net.Receive("JMod_EZradio", function()
 		local msg = net.ReadString()
 		local radio = net.ReadEntity()
 		local ply = net.ReadEntity()
+
+		if not IsValid(radio) then return end
 
 		local tbl = {radio:GetColor(), "Aid Radio", Color(255, 255, 255), ": ", msg}
 
@@ -1445,7 +1477,21 @@ end
 
 --Item Inventory
 local function CreateInvButton(parent, itemTable, x, y, w, h, scrollFrame, invEnt)
-	if not(itemTable and IsValid(itemTable.ent)) then return end
+	if not(itemTable and IsValid(itemTable.ent)) then
+		print(invEnt)
+		net.Start("JMod_ItemInventory")
+			net.WriteString("missing")
+			net.WriteEntity(NULL)
+			net.WriteEntity(invEnt)
+		net.SendToServer()
+
+		if IsValid(parent) then
+			parent:Close()
+		end
+
+		return
+	end
+
 	local Buttalony, Ply = vgui.Create("DButton", scrollFrame), LocalPlayer()
 	local Matty = nil
 	if string.find(itemTable.ent:GetClass(), "prop_") then
@@ -1498,6 +1544,7 @@ local function CreateInvButton(parent, itemTable, x, y, w, h, scrollFrame, invEn
 					else
 						net.Start("JMod_ItemInventory")
 							net.WriteString("missing")
+							net.WriteEntity(NULL)
 							net.WriteEntity(invEnt)
 						net.SendToServer()
 					end
@@ -1515,6 +1562,7 @@ local function CreateInvButton(parent, itemTable, x, y, w, h, scrollFrame, invEn
 					else
 						net.Start("JMod_ItemInventory")
 							net.WriteString("missing")
+							net.WriteEntity(NULL)
 							net.WriteEntity(Ply)
 						net.SendToServer()
 					end
@@ -1529,6 +1577,8 @@ local function CreateInvButton(parent, itemTable, x, y, w, h, scrollFrame, invEn
 					net.WriteEntity(itemTable.ent)
 					if invEnt ~= Ply then
 						net.WriteEntity(invEnt)
+					else
+						net.WriteEntity(NULL)
 					end
 					net.SendToServer()
 				end
@@ -1791,6 +1841,7 @@ local JModInventoryMenu = function(PlyModel, itemTable)
 	PDispBT:SetPos(200, 30)
 	PDispBT:SetSize(200, 360)
 	PDispBT:SetText("")
+	PDispBT:SetTooltip("You can drag the model to rotate it.")
 
 	function PDispBT:Paint(w, h)
 		surface.SetDrawColor(0, 0, 0, 0)

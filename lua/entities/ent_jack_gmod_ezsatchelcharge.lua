@@ -16,6 +16,7 @@ ENT.EZinvPrime = false
 ENT.Hints = {"arm"}
 
 ENT.UsableMats = {MAT_DIRT, MAT_FOLIAGE, MAT_SAND, MAT_SLOSH, MAT_GRASS, MAT_SNOW}
+ENT.BlacklistedResources = {JMod.EZ_RESOURCE_TYPES.WATER, JMod.EZ_RESOURCE_TYPES.OIL, JMod.EZ_RESOURCE_TYPES.SAND, "geothermal"}
 
 DEFINE_BASECLASS(ENT.Base)
 
@@ -56,7 +57,10 @@ if SERVER then
 		self:EmitSound("weapons/c4/c4_plant.wav", 60, 80)
 		self:SetState(JMod.EZ_STATE_PRIMED)
 		self.Plunger:SetParent(nil)
-		constraint.NoCollide(self, self.Plunger, 0, 0)
+		local NoCollide = constraint.NoCollide(self, self.Plunger, 0, 0, true)
+		timer.Simple(.5, function()
+			if IsValid(NoCollide) then NoCollide:Remove() end
+		end)
 		self.DetCable = constraint.Rope(self, self.Plunger, 0, 0, Vector(0, 0, 0), Vector(0, 0, 0), 2000, 0, 0, .5, "cable/cable", false)
 		self.Plunger.DetCable = self.DetCable
 		
@@ -154,6 +158,7 @@ if SERVER then
 		if IsValid(self.Plunger) then
 			JMod.SetEZowner(self, self.Plunger.EZowner)
 		end
+		local Blaster = JMod.GetEZowner(self)
 
 		timer.Simple(0, function()
 			if IsValid(self) then
@@ -187,6 +192,36 @@ if SERVER then
 
 				JMod.WreckBuildings(self, SelfPos, PowerMult)
 				JMod.BlastDoors(self, SelfPos, PowerMult)
+
+				if self.StuckTo and self.StuckTo == game.GetWorld() then
+					-- Find what deposit we are over
+					local DepositKey = JMod.GetDepositAtPos(self, SelfPos, 1)
+
+					if DepositKey then
+						local DepositTable = JMod.NaturalResourceTable[DepositKey]
+						local AmountToBlast = math.min(math.random(math.floor(DepositTable.amt * .05), math.ceil(DepositTable.amt * .10)), 400)
+						local ChunkNumber = math.ceil(AmountToBlast/(25 * JMod.Config.ResourceEconomy.MaxResourceMult))
+
+						for i = 1, ChunkNumber do
+							timer.Simple(.1 * i, function()
+								local Ore = ents.Create(JMod.EZ_RESOURCE_ENTITIES[DepositTable.typ])
+								Ore:SetPos(SelfPos)
+								Ore:SetAngles(AngleRand())
+								Ore:Spawn()
+								JMod.SetEZowner(Ore, Blaster)
+								Ore:SetEZsupplies(DepositTable.typ, math.floor(AmountToBlast / ChunkNumber))
+								Ore:Activate()
+								timer.Simple(0, function()
+									if IsValid(Ore) and IsValid(Ore:GetPhysicsObject()) then
+										Ore:GetPhysicsObject():AddVelocity((vector_up + VectorRand() * .5) * 500)
+									end
+								end)
+							end)
+						end
+
+						JMod.DepleteNaturalResource(DepositKey, AmountToBlast)
+					end
+				end
 
 				timer.Simple(0, function()
 					local ZaWarudo = game.GetWorld()
