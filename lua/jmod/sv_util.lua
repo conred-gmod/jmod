@@ -477,6 +477,8 @@ function JMod.EZprogressTask(ent, pos, deconstructor, task, mult)
 				return "object is already unconstrained"
 			end
 		elseif task == "salvage" then
+			if not IsValid(ent:CPPIGetOwner()) then return "object is owned by world" end
+
 			if constraint.HasConstraints(ent) or not Phys:IsMotionEnabled() then
 				return "object is constrained"
 			else
