@@ -480,7 +480,7 @@ function JMod.EZprogressTask(ent, pos, deconstructor, task, mult)
 			if not IsValid(ent:CPPIGetOwner()) then return "object is owned by world" end
 
 			if constraint.HasConstraints(ent) or not Phys:IsMotionEnabled() then
-				return "object is constrained"
+				return "object must be loosened first"
 			else
 				local Mass = (Phys:GetMass() * ent:GetPhysicsObjectCount()) ^ .8
 				ent:ForcePlayerDrop()

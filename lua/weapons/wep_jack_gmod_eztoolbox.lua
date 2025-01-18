@@ -310,7 +310,7 @@ function SWEP:SetEZsupplies(typ, amt, setter)
 end
 
 function SWEP:DetermineBuildPos()
-	local BuildInfo = self.EZpreview
+	local BuildInfo = self.EZpreview or {sizeScale = 1}
 	BuildInfo.SpawnAngles = BuildInfo.SpawnAngles or Angle(0, 0, 0)
 	local Ent, Pos, Norm = self:WhomIlookinAt(math.max((BuildInfo.sizeScale or self.CurrentBuildSize) * 30, 100))
 	if not BuildInfo then return Ent, Pos, Norm, BuildInfo.SpawnAngles end
@@ -395,8 +395,8 @@ function SWEP:BuildItem(selectedBuild)
 		Built = true
 		local BuildSteps = math.ceil(20 * (BuildInfo.sizeScale or 1))
 
-		self:SetElectricity(math.Clamp(self:GetElectricity() - 8 * (BuildInfo.sizeScale or 1), 0, MaxElecConsume))
-		self:SetGas(math.Clamp(self:GetGas() - 4 * (BuildInfo.sizeScale or 1), 0, MaxGasConsume))
+		self:SetElectricity(self:GetElectricity() - math.Clamp(4 * (BuildInfo.sizeScale or 1), 0, MaxElecConsume))
+		self:SetGas(self:GetGas() - math.Clamp(3 * (BuildInfo.sizeScale or 1), 0, MaxGasConsume))
 
 		for i = 1, BuildSteps do
 			timer.Simple(i / 100, function()

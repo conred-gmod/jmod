@@ -390,10 +390,10 @@ elseif(CLIENT)then
 		self.Camera = JMod.MakeModel(self,"models/props_combine/combinecamera001.mdl")
 		self.TopCanopy = JMod.MakeModel(self,"models/props_phx/construct/windows/window_dome360.mdl")
 		self.BottomCanopy = JMod.MakeModel(self,"models/props_phx/construct/windows/window_dome360.mdl")
-		self.TopCanopy:SetSubMaterial(0,"mri-scanner/mri-dome_side")
-		self.BottomCanopy:SetSubMaterial(0,"mri-scanner/mri-dome_side")
-		self.TopCanopy:SetSubMaterial(2,"mri-scanner/mri-dome")
-		self.BottomCanopy:SetSubMaterial(2,"mri-scanner/mri-dome")
+		self.TopCanopy:SetSubMaterial(0,"mri-sjanner/mri-dome_side")
+		self.BottomCanopy:SetSubMaterial(0,"mri-sjanner/mri-dome_side")
+		self.TopCanopy:SetSubMaterial(1,"mri-sjanner/mri-dome")
+		self.BottomCanopy:SetSubMaterial(1,"mri-sjanner/mri-dome")
 		self.Rotator = JMod.MakeModel(self,"models/hunter/tubes/tube4x4x1.mdl")
 		-- models/props_phx/construct/glass/glass_dome360.mdl
 		self.OpenAmt = 1
@@ -462,27 +462,18 @@ elseif(CLIENT)then
 			CamAng:RotateAroundAxis(Right,180)
 			JMod.RenderModel(self.Camera,BasePos+Up*10+Forward*25,CamAng,nil,Vector(1,1,1),JMod.EZ_GRADE_MATS[Grade])
 			---
-			local Matricks = Matrix()
-			Matricks:Scale(Vector(.4, 1.45, .5))
-			self.TopCanopy:EnableMatrix("RenderMultiply", Matricks)
 			local TopCanopyAng = SelfAng:GetCopy()
 			TopCanopyAng:RotateAroundAxis(Forward, -10 * self.OpenAmt)
-			JMod.RenderModel(self.TopCanopy, BasePos - Up * (17 - 10 * self.OpenAmt) + Right * 2, TopCanopyAng)
+			JMod.RenderModel(self.TopCanopy, BasePos - Up * (17 - 10 * self.OpenAmt) + Right * 2, TopCanopyAng, Vector(.4, 1.45, .5))
 			---
-			local Matricks = Matrix()
-			Matricks:Scale(Vector(.4, 1.45, .5))
-			self.BottomCanopy:EnableMatrix("RenderMultiply", Matricks)
 			local BottomCanopyAng = SelfAng:GetCopy()
 			BottomCanopyAng:RotateAroundAxis(Right, 180)
-			JMod.RenderModel(self.BottomCanopy, BasePos - Up * 17 + Right * 2, BottomCanopyAng)
+			JMod.RenderModel(self.BottomCanopy, BasePos - Up * 17 + Right * 2, BottomCanopyAng, Vector(.4, 1.45, .5))
 			---
-			local Matricks = Matrix()
-			Matricks:Scale(Vector(.58, .58, .3))
-			self.Rotator:EnableMatrix("RenderMultiply", Matricks)
 			local RotatorAng = SelfAng:GetCopy()
 			RotatorAng:RotateAroundAxis(Forward,90)
 			RotatorAng:RotateAroundAxis(Right,self.DriveCycle)
-			JMod.RenderModel(self.Rotator, BasePos - Up*10 - Right*22, RotatorAng,nil,Vector(1,1,1),JMod.EZ_GRADE_MATS[Grade])
+			JMod.RenderModel(self.Rotator, BasePos - Up*10 - Right*22, RotatorAng,Vector(.58, .58, .3),Vector(1,1,1),JMod.EZ_GRADE_MATS[Grade])
 			---
 			if State > 0 then
 				local Opacity = math.random(50, 200)

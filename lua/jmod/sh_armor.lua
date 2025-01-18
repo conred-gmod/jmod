@@ -984,6 +984,28 @@ JMod.ArmorTable = {
 		dur = 100,
 		ent = "ent_jack_gmod_ezarmor_backpack"
 	},
+	["Munition Backpack"] = {
+		PrintName = "Munition Backpack",
+		mdl = "models/weapons/jautocannonbackpack.mdl",
+		clr = {
+			r = 255,
+			g = 255,
+			b = 255
+		},
+		clrForced = true,
+		slots = {
+			back = .9
+		},
+		ammoCarryMult = 5,
+		def = NonArmorProtectionProfile,
+		bon = "ValveBiped.Bip01_Spine2",
+		siz = Vector(.9, .9, .9),
+		pos = Vector(3, 2, 0),
+		ang = Angle(-90, 0, 90),
+		wgt = 5,
+		dur = 100,
+		ent = "ent_jack_gmod_ezarmor_munitionbackpack"
+	},
 	["Pouches"] = {
 		PrintName = "Pouches",
 		mdl = "models/weapons/w_defuser.mdl",
@@ -1075,7 +1097,7 @@ function JMod.GetArmorBiologicalResistance(ply, typ)
 			if not armorData.tgl then
 				local ArmorInfo = JMod.ArmorTable[armorData.name]
 
-				if ArmorInfo.def and (ArmorInfo.chrg and ArmorInfo.chrg.chemicals and armorData.chrg.chemicals >= 0) then
+				if ArmorInfo.def and (ArmorInfo.chrg and ArmorInfo.chrg.chemicals and armorData.chrg.chemicals > 0) then
 					skinResist = skinResist + (ArmorInfo.def[typ] or 0) * ((ArmorInfo.slots.chest or 0) + (ArmorInfo.slots.abdomen or 0)) / 2
 					inhaleResist = inhaleResist + (ArmorInfo.def[typ] or 0) * (ArmorInfo.slots.mouthnose or 0)
 					eyeProtect = eyeProtect + (ArmorInfo.def[typ] or 0) * (ArmorInfo.slots.eyes or 0)
@@ -1088,7 +1110,7 @@ function JMod.GetArmorBiologicalResistance(ply, typ)
 end
 
 function JMod.DepleteArmorChemicalCharge(ply, amt)
-	local SubtractAmt = amt * JMod.Config.Armor.DegradationMult * math.Rand(.5, 1.5)
+	local SubtractAmt = amt * JMod.Config.Armor.DegradationMult * math.Rand(.05, .15)
 
 	if ply.EZarmor then
 		for k, armorData in pairs(ply.EZarmor.items) do

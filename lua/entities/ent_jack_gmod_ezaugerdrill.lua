@@ -67,6 +67,9 @@ if(SERVER)then
 			if not self.DepositKey then
 				JMod.Hint(JMod.GetEZowner(self), "ground drill")
 				self.EZstayOn = nil
+				if self:GetState() > STATE_OFF then
+					self:TurnOff()
+				end
 			elseif(GroundIsSolid)then
 				--
 				local HitAngle = Tr.HitNormal:Angle()
@@ -210,7 +213,6 @@ if(SERVER)then
 				self:SetProgress(self:GetProgress() + drillRate)
 
 				if self:GetProgress() >= 100 then
-					local amtToDrill = math.min(JMod.NaturalResourceTable[self.DepositKey].amt, 100)
 					self:ProduceResource()
 				end
 

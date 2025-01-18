@@ -13,7 +13,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 		Note = "radio packages must have all lower-case names, see http://wiki.garrysmod.com/page/Enums/IN for key numbers",
 		Info = {
 			Author = "Jackarunda & Friends",
-			Version = 49
+			Version = 50
 		},
 		General = {
 			Hints = true,
@@ -843,7 +843,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 					[JMod.EZ_RESOURCE_TYPES.STEEL] = 100,
 					[JMod.EZ_RESOURCE_TYPES.PLASTIC] = 100,
 					[JMod.EZ_RESOURCE_TYPES.RUBBER] = 100,
-					[JMod.EZ_RESOURCE_TYPES.ADVANCEDPARTS] = 5,
+					[JMod.EZ_RESOURCE_TYPES.ADVANCEDPARTS] = 15,
 					[JMod.EZ_RESOURCE_TYPES.PRECISIONPARTS] = 100
 				},
 				sizeScale = 4,
@@ -2263,6 +2263,18 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 				craftingType = "workbench",
 				description = "Carry more items and resources to school."
 			},
+			["EZ Munition Backpack"] = {
+				results = JMod.ArmorTable["Munition Backpack"].ent,
+				craftingReqs = {
+					[JMod.EZ_RESOURCE_TYPES.BASICPARTS] = 50,
+					[JMod.EZ_RESOURCE_TYPES.CLOTH] = 50,
+					[JMod.EZ_RESOURCE_TYPES.RUBBER] = 20,
+					[JMod.EZ_RESOURCE_TYPES.ADVANCEDTEXTILES] = 10
+				},
+				category = "Apparel",
+				craftingType = "workbench",
+				description = "Multiplies the amount of ammunition you can carry. Very useful for heavy weapons."
+			},
 			["EZ Pouches"] = {
 				results = JMod.ArmorTable["Pouches"].ent,
 				craftingReqs = {
@@ -2587,7 +2599,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 		local Rope, Ent2 = JMod.Rope(playa, nil, nil, 2, 20000, "cable/cable2")
 		local PlugPos = Ent2:WorldToLocal(position)
 		local RopeDist = math.ceil(playa.EZropeData.Ent:GetPos():Distance(position))
-		if JMod.CreateResourceConnection(Ent1, Ent2, JMod.EZ_RESOURCE_TYPES.POWER, PlugPos, RopeDist, Rope) or JMod.CreateResourceConnection(Ent2, Ent1, JMod.EZ_RESOURCE_TYPES.POWER, PlugPos, RopeDist, Rope) then
+		if JMod.CreateResourceConnection(Ent1, Ent2, JMod.EZ_RESOURCE_TYPES.POWER, PlugPos, RopeDist, Rope) then
 			local effectdata = EffectData()
 			effectdata:SetOrigin(position)
 			effectdata:SetScale(1)

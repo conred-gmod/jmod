@@ -7,14 +7,9 @@ end
 
 local function JackaSpawnHook(ply, transition)
 	if transition then return end
-	ply.JModSpawnTime = CurTime()
 	ply.JModFriends = ply.JModFriends or {}
 
-	if ply.EZarmor and ply.EZarmor.suited then
-		ply:SetColor(Color(255, 255, 255))
-	end
-
-	ply.EZarmor = {
+	ply.EZarmor = ply.EZarmor or {
 		items = {},
 		speedFrac = nil,
 		effects = {},
@@ -25,19 +20,25 @@ local function JackaSpawnHook(ply, transition)
 		totalWeight = 0
 	}
 
-	ply.JModInv = table.Copy(JMod.DEFAULT_INVENTORY)
+	ply.JModInv = ply.JModInv or table.Copy(JMod.DEFAULT_INVENTORY)
 
 	JMod.EZarmorSync(ply)
-	ply.EZhealth = nil
-	ply.EZirradiated = nil
 	ply.EZoxygen = 100
 	ply.EZbleeding = 0
 	JMod.SyncBleeding(ply)
-	ply.EZvirus = nil
 
 	timer.Simple(0, function()
 		if IsValid(ply) then
 			ply.EZoriginalPlayerModel = ply:GetModel()
+			if ply.EZarmor.suited then
+				for k, v in pairs(ply.EZarmor.items) do
+					local ArmorInfo = JMod.ArmorTable[v.name]
+		
+					if ArmorInfo.plymdl then
+						JMod.SetPlayerModel(ply, ArmorInfo.plymdl)
+					end
+				end
+			end
 		end
 	end)
 
@@ -90,7 +91,9 @@ hook.Add("PlayerInitialSpawn", "JMod_PlayerInitialSpawn", function(ply, transit)
 	JMod.LuaConfigSync(false) 
 end)
 
-hook.Add("PlayerSelectSpawn", "JMod_SleepingBagSpawn", function(ply, spawnpoint) 
+hook.Add("PlayerSelectSpawn", "JMod_SleepingBagSpawn", function(ply, transition) 
+	if transition then return end
+	ply.JModSpawnTime = CurTime()
 	local STATE_ROLLED, STATE_UNROLLED = 0, 1
 	local Sleepingbag = ply.JModSpawnPointEntity
 	if IsValid(Sleepingbag) and (Sleepingbag.State == STATE_UNROLLED) and (IsValid(Sleepingbag.Pod)) then
@@ -290,9 +293,10 @@ local function VirusCough(ply)
 		JMod.TryCough(ply)
 	end
 
+	local VirusAttacker = (IsValid(ply.EZvirus.Attacker) and ply.EZvirus.Attacker) or game.GetWorld()
 	local Dmg = DamageInfo()
 	Dmg:SetDamageType(DMG_GENERIC) -- why aint this working to hazmat wearers?
-	Dmg:SetAttacker((IsValid(ply.EZvirus.Attacker) and ply.EZvirus.Attacker) or game.GetWorld())
+	Dmg:SetAttacker(VirusAttacker)
 	Dmg:SetInflictor(ply)
 	Dmg:SetDamagePosition(ply:GetPos())
 	Dmg:SetDamageForce(Vector(0, 0, 0))
@@ -301,7 +305,7 @@ local function VirusCough(ply)
 	--
 	local HostFaceProtection, HostSkinProtection = JMod.GetArmorBiologicalResistance(ply, DMG_RADIATION)
 	if (HostFaceProtection + HostSkinProtection) >= 2 then return end
-	JMod.TryVirusInfectInRange(ply, ply.EZvirus.Attacker, HostFaceProtection, HostSkinProtection)
+	JMod.TryVirusInfectInRange(ply, VirusAttacker, HostFaceProtection, HostSkinProtection)
 
 	if math.random(1, 10) == 10 then
 		local Gas = ents.Create("ent_jack_gmod_ezvirusparticle")
@@ -937,9 +941,7 @@ hook.Add("GetFallDamage", "JMod_FallDamage", function(ply, spd)
 end)
 
 hook.Add("DoPlayerDeath", "JMOD_SERVER_DOPLAYERDEATH", function(ply, attacker, dmg)
-	ply.EZnutrition = nil
-	ply.EZhealth = nil
-	ply.EZkillme = nil
+	
 	ply.EZoverDamage = dmg:GetDamage()
 	--jprint(ply:Health(), ply.EZoverDamage)
 
@@ -977,13 +979,7 @@ hook.Add("PlayerDeath", "JMOD_SERVER_PLAYERDEATH", function(ply, inflictor, atta
 			end
 		end
 	end
-	ply.EZoverDamage = nil
-	if ply.JMod_WillAsplode then
-		ply.EZnutrition = nil
-		ply.EZhealth = nil
-		ply.EZkillme = nil
-	end
-	ply.JMod_WillAsplode = nil
+
 	ply:SetNW2Bool("EZrocketSpin", false)
 
 	local ShouldInvDrop = JMod.Config.QoL.JModInvDropOnDeath
@@ -1005,6 +1001,32 @@ hook.Add("PlayerDeath", "JMOD_SERVER_PLAYERDEATH", function(ply, inflictor, atta
 			end
 		end
 	end
+end)
+
+hook.Add("PostPlayerDeath", "JMod_PostPlayerDeath", function(ply)
+	if ply.EZarmor and ply.EZarmor.suited then
+		ply:SetColor(Color(255, 255, 255))
+	end
+
+	ply.EZarmor = {
+		items = {},
+		speedFrac = nil,
+		effects = {},
+		mskmat = nil,
+		sndlop = nil,
+		suited = false,
+		bodygroups = nil,
+		totalWeight = 0
+	}
+
+	ply.EZnutrition = nil
+	ply.EZhealth = nil
+	ply.EZkillme = nil
+	ply.EZoverDamage = nil
+	ply.EZirradiated = nil
+	ply.JMod_WillAsplode = nil
+	ply.EZvirus = nil
+	ply.EZblastShock = nil
 end)
 
 concommand.Add("jmod_debug_parachute", function(ply, cmd, args) 
