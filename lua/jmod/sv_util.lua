@@ -18,6 +18,7 @@ function JMod.AeroDrag(ent, forward, mult, spdReq)
 	Phys:ApplyForceOffset(Vel * Mass / 6 * mult, Pos + forward)
 	Phys:ApplyForceOffset(-Vel * Mass / 6 * mult, Pos - forward)
 	Phys:AddAngleVelocity(-Phys:GetAngleVelocity() * Mass / 1000)
+	ent.LastAreoDragAmount = mult
 end
 
 -- this causes an object to rotate to point and fly to a point you give it
@@ -317,6 +318,7 @@ local SpriteResourceTypes = {JMod.EZ_RESOURCE_TYPES.GAS, JMod.EZ_RESOURCE_TYPES.
 
 function JMod.ResourceEffect(typ, fromPoint, toPoint, amt, spread, scale, upSpeed)
 	--print("Type: " .. tostring(typ) .. " From point: " .. tostring(fromPoint) .. " Amount: " .. amt)
+	if typ == nil then return end
 	amt = (amt and math.Clamp(amt, 0, 1)) or 1
 	spread = spread or 1
 	scale = scale or 1
@@ -364,6 +366,13 @@ function JMod.EZprogressTask(ent, pos, deconstructor, task, mult)
 	local Time = CurTime()
 
 	if not IsValid(ent) then return "Invalid Ent" end
+
+	local CancelTaskMessage = hook.Run("JMod_EZprogressTask", ent, pos, deconstructor, task, mult)
+
+	if CancelTaskMessage ~= nil then
+
+		return CancelTaskMessage
+	end
 
 	if task == "mining" then
 		local DepositKey = JMod.GetDepositAtPos(ent, pos)
@@ -560,9 +569,10 @@ function JMod.GetPlayerStrength(ply)
 	if not(IsValid(ply) and ply:IsPlayer() and ply:Alive()) then return 1 end
 	local PlyHealth = ply:Health()
 	local PlyMaxHealth = ply:GetMaxHealth()
+	local HealthDiff = math.Clamp(PlyHealth - PlyMaxHealth, 0, PlyMaxHealth * 2)
 
 	--jprint(1 + (math.max(PlyHealth - PlyMaxHealth, 0) ^ 1.2 / (PlyMaxHealth)) * JMod.Config.General.HandGrabStrength)
-	return 1 + (math.max(PlyHealth - PlyMaxHealth, 0) ^ 1.2 / (PlyMaxHealth)) * JMod.Config.General.HandGrabStrength
+	return 1 + math.Round(HealthDiff ^ 1.2 / (PlyMaxHealth), 2) * JMod.Config.General.HandGrabStrength
 end
 
 function JMod.DebugArrangeEveryone(ply, mult)

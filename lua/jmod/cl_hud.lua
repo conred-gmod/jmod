@@ -337,15 +337,14 @@ hook.Add("RenderScreenspaceEffects", "JMOD_SCREENSPACE", function()
 			GoggleDarkness = math.Clamp(GoggleDarkness - FT * 100, 0, 100)
 		end
 
+		local WearoffMult = 1 / (JMod.Config.Explosives.Flashbang.FlashDurationMult or 1)
 		if ply.EZflashbanged then
 			if Alive then
 				DrawMotionBlur(.001, math.Clamp(ply.EZflashbanged / 20, 0, 1), .01)
-				ply.EZflashbanged = math.Clamp(ply.EZflashbanged - 5 * FT, 0, 100)
+				ply.EZflashbanged = math.Clamp(ply.EZflashbanged - 10 * WearoffMult * FT, 0, 100)
 				if ply.EZflashbanged <= 0 then
 					ply.EZflashbanged = nil
 				end
-			else
-				ply.EZflashbanged = nil
 			end
 		end
 		if ply.EZflashbangEffects then
@@ -356,7 +355,7 @@ hook.Add("RenderScreenspaceEffects", "JMOD_SCREENSPACE", function()
 				surface.SetDrawColor(255, 255, 255, 255 * Mult)
 				--surface.SetAlphaMultiplier(1)
 				if info[2] > 0 then
-					info[2] = info[2] - FT * 5
+					info[2] = info[2] - FT * 5 * WearoffMult
 					surface.DrawTexturedRect(info[1].x - info[1].size / 2, info[1].y - info[1].size / 2, info[1].size, info[1].size)
 				else
 					table.remove(ply.EZflashbangEffects, k)
@@ -387,14 +386,20 @@ hook.Add("RenderScreenspaceEffects", "JMOD_SCREENSPACE", function()
 	end
 
 	if CurVisionBlur > 0 and FirstPerson then
-		render.UpdateScreenEffectTexture()
-		blurMaterial:SetTexture("$BASETEXTURE", render.GetScreenEffectTexture())
-		blurMaterial:SetTexture("$DEPTHTEXTURE", render.GetResolvedFullFrameDepth())
-		blurMaterial:SetFloat("$size", (CurVisionBlur * 40) ^ .5)
-		blurMaterial:SetFloat("$focus", 1)
-		blurMaterial:SetFloat("$focusradius", 1)
-		render.SetMaterial(blurMaterial)
-		render.DrawScreenQuad()
+		if GetConVar("jmod_cl_blurry_menus"):GetBool() then
+			render.UpdateScreenEffectTexture()
+			blurMaterial:SetTexture("$BASETEXTURE", render.GetScreenEffectTexture())
+			blurMaterial:SetTexture("$DEPTHTEXTURE", render.GetResolvedFullFrameDepth())
+			blurMaterial:SetFloat("$size", (CurVisionBlur * 40) ^ .5)
+			blurMaterial:SetFloat("$focus", 1)
+			blurMaterial:SetFloat("$focusradius", 1)
+			render.SetMaterial(blurMaterial)
+			render.DrawScreenQuad()
+		else
+			-- We grey out the screen for potato users
+			surface.SetDrawColor(100, 120, 100, math.min(255 * CurVisionBlur, 240))
+			surface.DrawRect(-1, -1, W + 2, H + 2)
+		end
 	end
 
 	ply.EZvisionBlur = math.Clamp((ply.EZvisionBlur or 0) - FT * BlurFadeAmt, 0, 75)

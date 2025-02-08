@@ -356,6 +356,7 @@ net.Receive("JMod_LuaConfigSync", function(dataLength)
 	JMod.Config.Weapons = {SwayMult = Payload.WeaponSwayMult}
 	JMod.Config.QoL = table.FullCopy(Payload.QoL)
 	JMod.Config.ResourceEconomy = {MaxResourceMult = Payload.MaxResourceMult}
+	JMod.Config.Explosives = {Flashbang = Payload.Flashbang}
 
 	if tobool(net.ReadBit()) then
 		for k, v in player.Iterator() do
@@ -487,9 +488,10 @@ end
 local WHOTents, NextWHOTcheck = {}, 0
 
 local function IsWHOT(ent)
+	if not(IsValid(ent)) then return end
 	local Time = CurTime()
 	if ent:IsWorld() then return false end
-	if ent:IsPlayer() or ent:IsOnFire() then return true end
+	if ent:IsPlayer() or ent:IsOnFire() then return true end -- null entity
 
 	if ent:IsNPC() then
 		if ent.Health and (ent:Health() > 0) then return true end
@@ -970,7 +972,7 @@ end)
 -- note that the song's beat is about .35 seconds
 
 -- Liquid Effects
-local WaterSprite, FireSprite = Material("effects/splash1"), Material("effects/fire_cloud1")
+local WaterSprite, FireSprite = Material("effects/jmod/splash2"), Material("effects/fire_cloud1")
 local RainbowSprite, RainbowCol = Material("effects/mat_jack_gmod_rainbow"), Color(255, 255, 255, 20)
 
 JMod.ParticleSpecs = {
@@ -1043,7 +1045,7 @@ JMod.ParticleSpecs = {
 		end,
 		particleDrawFunc = function(self, size, col)
 			render.SetMaterial(WaterSprite)
-			render.DrawSprite(self.pos, size * 2, size * 2, col)
+			render.DrawSprite(self.pos + Vector(0, 0, -size * .5), size * 2, size * 2, col)
 		end,
 		impactFunc = function(self, normal)
 			local Splach = EffectData()

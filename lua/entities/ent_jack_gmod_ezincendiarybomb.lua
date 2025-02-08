@@ -9,8 +9,8 @@ ENT.Spawnable = true
 ENT.AdminSpawnable = true
 ---
 ENT.JModPreferredCarryAngles = Angle(0, 0, 0)
-ENT.EZRackOffset = Vector(0, 0, 10)
-ENT.EZRackAngles = Angle(0, 0, 0)
+ENT.EZrackOffset = Vector(0, 0, 10)
+ENT.EZrackAngles = Angle(0, 0, 0)
 ENT.EZbombBaySize = 5
 ---
 ENT.EZguidable = false
@@ -55,13 +55,13 @@ if SERVER then
 
 		local Phys = self:GetPhysicsObject()
 
-		if (self:GetState() == STATE_ARMED) and (Phys:GetVelocity():Length() > 400) and not self:IsPlayerHolding() and not constraint.HasConstraints(self) then
+		if (self:GetState() == STATE_ARMED) and (Phys:GetVelocity():Length() > 400) and not(self:IsPlayerHolding() or constraint.HasConstraints(self)) then
 			self.FreefallTicks = self.FreefallTicks + 1
 
 			if self.FreefallTicks >= 10 then
 				local Tr = util.QuickTrace(self:GetPos(), Phys:GetVelocity():GetNormalized() * 800, self)
 
-				if Tr.Hit then
+				if Tr.Hit and not Tr.HitSky then
 					self:Detonate()
 				end
 			end

@@ -13,7 +13,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 		Note = "radio packages must have all lower-case names, see http://wiki.garrysmod.com/page/Enums/IN for key numbers",
 		Info = {
 			Author = "Jackarunda & Friends",
-			Version = 50
+			Version = 52
 		},
 		General = {
 			Hints = true,
@@ -78,6 +78,10 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 				RangeMult = 1,
 				PowerMult = 1,
 				RadiationSickness = true
+			},
+			Flashbang = {
+				FlashDurationMult = 1,
+				StunDurationMult = 1
 			},
 			BombDisarmSpeed = 1,
 			DoorBreachResetTimeMult = 1,
@@ -146,7 +150,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 					description = "A random collection of armor*.\n\n *Jackarunda Industries outsources package sorting. We are not liable for any unusual items.",
 					category = "Apparel",
 					results = {
-						{"RAND", JMod.ArmorTable["GasMask"].ent, JMod.ArmorTable["BallisticMask"].ent, JMod.ArmorTable["NightVisionGoggles"].ent, JMod.ArmorTable["ThermalGoggles"].ent, JMod.ArmorTable["Respirator"].ent, JMod.ArmorTable["Light-Helmet"].ent, JMod.ArmorTable["Medium-Helmet"].ent, JMod.ArmorTable["Heavy-Helmet"].ent, JMod.ArmorTable["Riot-Helmet"].ent, JMod.ArmorTable["Heavy-Riot-Helmet"].ent, JMod.ArmorTable["Ultra-Heavy-Helmet"].ent, JMod.ArmorTable["Metal Bucket"].ent, JMod.ArmorTable["Metal Pot"].ent, JMod.ArmorTable["Ceramic Pot"].ent, JMod.ArmorTable["Traffic Cone"].ent, JMod.ArmorTable["Light-Vest"].ent, JMod.ArmorTable["Medium-Light-Vest"].ent, JMod.ArmorTable["Medium-Vest"].ent, JMod.ArmorTable["Medium-Heavy-Vest"].ent, JMod.ArmorTable["Heavy-Vest"].ent, JMod.ArmorTable["Pelvis-Panel"].ent, JMod.ArmorTable["Light-Left-Shoulder"].ent, JMod.ArmorTable["Heavy-Left-Shoulder"].ent, JMod.ArmorTable["Light-Right-Shoulder"].ent, JMod.ArmorTable["Heavy-Right-Shoulder"].ent, JMod.ArmorTable["Left-Forearm"].ent, JMod.ArmorTable["Right-Forearm"].ent, JMod.ArmorTable["Light-Left-Thigh"].ent, JMod.ArmorTable["Heavy-Left-Thigh"].ent, JMod.ArmorTable["Light-Right-Thigh"].ent, JMod.ArmorTable["Heavy-Right-Thigh"].ent, JMod.ArmorTable["Left-Calf"].ent, JMod.ArmorTable["Right-Calf"].ent, JMod.ArmorTable["Hazmat Suit"].ent, 6}
+						{"RAND", JMod.ArmorTable["GasMask"].ent, JMod.ArmorTable["BallisticMask"].ent, JMod.ArmorTable["NightVisionGoggles"].ent, JMod.ArmorTable["ThermalGoggles"].ent, JMod.ArmorTable["Respirator"].ent, JMod.ArmorTable["Light-Helmet"].ent, JMod.ArmorTable["Medium-Helmet"].ent, JMod.ArmorTable["Heavy-Helmet"].ent, JMod.ArmorTable["Riot-Helmet"].ent, JMod.ArmorTable["Heavy-Riot-Helmet"].ent, JMod.ArmorTable["Ultra-Heavy-Helmet"].ent, JMod.ArmorTable["Metal Bucket"].ent, JMod.ArmorTable["Metal Pot"].ent, JMod.ArmorTable["Ceramic Pot"].ent, JMod.ArmorTable["Traffic Cone"].ent, JMod.ArmorTable["Light-Vest"].ent, JMod.ArmorTable["Medium-Light-Vest"].ent, JMod.ArmorTable["Medium-Vest"].ent, JMod.ArmorTable["Medium-Heavy-Vest"].ent, JMod.ArmorTable["Heavy-Vest"].ent, JMod.ArmorTable["Pelvis-Panel"].ent, JMod.ArmorTable["Light-Left-Shoulder"].ent, JMod.ArmorTable["Heavy-Left-Shoulder"].ent, JMod.ArmorTable["Light-Right-Shoulder"].ent, JMod.ArmorTable["Heavy-Right-Shoulder"].ent, JMod.ArmorTable["Left-Forearm"].ent, JMod.ArmorTable["Right-Forearm"].ent, JMod.ArmorTable["Light-Left-Thigh"].ent, JMod.ArmorTable["Heavy-Left-Thigh"].ent, JMod.ArmorTable["Light-Right-Thigh"].ent, JMod.ArmorTable["Heavy-Right-Thigh"].ent, JMod.ArmorTable["Left-Calf"].ent, JMod.ArmorTable["Right-Calf"].ent, JMod.ArmorTable["Hazmat Suit"].ent, JMod.ArmorTable["Munition Backpack"].ent, 6}
 					}
 				},
 				["crossbow"] = {
@@ -1011,6 +1015,18 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 				category = "Explosives",
 				craftingType = "toolbox",
 				description = "Cluster bomb that can pierce multiple hard targets from the air."
+			},
+			["EZ Cluster Mine Layer"] = {
+				results = "ent_jack_gmod_ezclusterminebomb",
+				craftingReqs = {
+					[JMod.EZ_RESOURCE_TYPES.BASICPARTS] = 50,
+					[JMod.EZ_RESOURCE_TYPES.BASICPARTS] = 15 * 45,
+					[JMod.EZ_RESOURCE_TYPES.EXPLOSIVES] = 10 * 45
+				},
+				sizeScale = 1,
+				category = "Explosives",
+				craftingType = "toolbox",
+				description = "Cluster mine layer for creating a new Afghanistan."
 			},
 			["EZ War Mine"] = {
 				results = "ent_jack_gmod_ezwarmine",

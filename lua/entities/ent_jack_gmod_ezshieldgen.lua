@@ -5,7 +5,7 @@ ENT.PrintName = "EZ Bubble Shield Generator"
 ENT.Author = "Jackarunda"
 ENT.Category = "JMod - EZ Machines"
 ENT.Information = ""
-ENT.Spawnable = true
+ENT.Spawnable = false
 ENT.AdminOnly = false
 ENT.Base = "ent_jack_gmod_ezmachine_base"
 ENT.Model = "models/jmod/bubble_shield_generator.mdl"
@@ -21,7 +21,8 @@ ENT.StaticPerfSpecs = {
 }
 ENT.DynamicPerfSpecs = {
 	MaxElectricity = 100,
-	MaxShieldStrength = 1
+	MaxShieldStrength = 1,
+	ChargeSpeed = 5
 }
 ENT.EZconsumes = {
 	JMod.EZ_RESOURCE_TYPES.POWER
@@ -78,15 +79,19 @@ if(SERVER)then
 				self.Established.Pos = Tr.HitPos
 				self.Established.Norm = Tr.HitNormal
 				self.Established.OnWorld = true
+				self:GetPhysicsObject():SetVelocity(Vector(0, 0, 0))
+				self:GetPhysicsObject():EnableMotion(false)
 				return true
 			end
 			if (Tr.Entity and Tr.Entity.GetPhysicsObject) then
 				local Phys = Tr.Entity:GetPhysicsObject()
-				if (Phys and Phys.GetMass) then
-					if (Phys:GetMass() >= 500) then
+				if (IsValid(Phys) and Phys.GetMass) then
+					if (Phys:GetMass() >= 5000) and not(Phys:IsMotionEnabled()) then
 						self.Established.Pos = Tr.HitPos
 						self.Established.Norm = Tr.HitNormal
 						self.Established.Anchor = Tr.Entity
+						self.Established.OnWorld = false
+						local Welded = constraint.Weld(self, Tr.Entity, 0, 0, 0, true)
 						return true
 					end
 				end
@@ -100,7 +105,7 @@ if(SERVER)then
 		if (self:GetElectricity() > 0) then
 			self.NextUseTime = CurTime() + 1
 			if (self:EstablishSelf(activator)) then
-				self:EmitSound("snds_jack_gmod/electrical_start_charge.ogg", 60, 100)
+				self:EmitSound("snds_jack_gmod/electrical_start_charge.ogg", 60, 100 * self.ChargeSpeed)
 				self:SetState(STATE_CHARGING)
 				self.BaseSoundLoop = CreateSound(self, "snds_jack_gmod/electric_machine_low_hum_loop.wav")
 				self.BaseSoundLoop:SetSoundLevel(65)
@@ -146,6 +151,12 @@ if(SERVER)then
 		self.Shield = ents.Create("ent_jack_gmod_bubble_shield")
 		self.Shield:SetPos(Pos)
 		self.Shield.Projector = self
+		self.Shield:SetSizeClass(self:GetGrade())
+
+		local ShieldStrength = 1000 -- todo: based on grade
+		self.Shield:SetMaxStrength(ShieldStrength)
+		self.Shield:SetStrength(ShieldStrength)
+
 		self.Shield:Spawn()
 		self.Shield:Initialize()
 	end
@@ -172,7 +183,7 @@ if(SERVER)then
 		self:UpdateWireOutputs()
 
 		if (State == STATE_ON) then
-			self:ConsumeElectricity(.1)
+			--self:ConsumeElectricity(.1)
 			if not (IsValid(self.Shield)) then
 				self:ShieldBreak()
 			else
@@ -183,8 +194,8 @@ if(SERVER)then
 			if (Progress >= 100) then
 				self:EstablishShield()
 			else
-				self:SetShieldProgress(Progress + 5)
-				self:ConsumeElectricity(1)
+				self:SetShieldProgress(Progress + 5 * self.ChargeSpeed)
+				self:ConsumeElectricity(1 * self.ChargeSpeed)
 			end
 		end
 

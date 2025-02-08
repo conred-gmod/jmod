@@ -9,8 +9,8 @@ ENT.Spawnable = true
 ENT.AdminSpawnable = true
 ---
 ENT.JModPreferredCarryAngles = Angle(0, -90, 0)
-ENT.EZRackOffset = Vector(0, -1.5, 0)
-ENT.EZRackAngles = Angle(0, 0, 0)
+ENT.EZrackOffset = Vector(0, -1.5, 0)
+ENT.EZrackAngles = Angle(0, 0, 0)
 ENT.EZrocket = true
 ---
 local STATE_BROKEN, STATE_OFF, STATE_ARMED, STATE_LAUNCHED = -1, 0, 1, 2
@@ -177,18 +177,20 @@ if SERVER then
 		util.BlastDamageInfo(BlastDmg, SelfPos + Dir * 30, 200)
 
 		local BlastTr = util.QuickTrace(SelfPos + Dir * 20, Dir * 100, self)
-		debugoverlay.Line(SelfPos, BlastTr.HitPos, 3, Color(255, 0, 0), true)
+		--debugoverlay.Line(SelfPos, BlastTr.HitPos, 3, Color(255, 0, 0), true)
 
-		if BlastTr.Hit and IsValid(BlastTr.Entity) then
-			debugoverlay.Cross(BlastTr.HitPos, 5, 5, Color(251, 255, 0), true)
-			local PeirceDmg = DamageInfo()
+		if BlastTr.Hit and (BlastTr.HitWorld or IsValid(BlastTr.Entity)) then
+			--debugoverlay.Cross(BlastTr.HitPos, 5, 5, Color(251, 255, 0), true)
+			--[[local PeirceDmg = DamageInfo()
 			PeirceDmg:SetAttacker(Att)
 			PeirceDmg:SetInflictor(self)
 			PeirceDmg:SetDamageType(DMG_SNIPER)
-			PeirceDmg:SetDamage(1500 * math.Rand(.8, 1.2))
-			PeirceDmg:SetDamagePosition(SelfPos)
-			PeirceDmg:SetDamageForce(Dir * 5000 * math.Rand(.8, 1.2))
-			BlastTr.Entity:TakeDamageInfo(PeirceDmg)
+			PeirceDmg:SetDamage(5000 * math.Rand(.8, 1.2))
+			PeirceDmg:SetReportedPosition(SelfPos)
+			PeirceDmg:SetDamagePosition(BlastTr.HitPos)
+			PeirceDmg:SetDamageForce(Dir * 20000 * math.Rand(.8, 1.2))
+			BlastTr.Entity:TakeDamageInfo(PeirceDmg)--]]
+			JMod.RicPenBullet(self, SelfPos, Dir, 8000, true, false, 1, .5)
 		end
 
 		for k, ent in pairs(ents.FindInSphere(SelfPos, 200)) do
