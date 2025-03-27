@@ -306,6 +306,7 @@ local ThermalGlowMat = Material("models/debug/debugwhite")
 
 hook.Add("PostDrawTranslucentRenderables", "JMOD_POSTDRAWTRANSLUCENTRENDERABLES", function()
 	local Time = CurTime()
+	local ply = LocalPlayer()
 
 	if Time > NextSlamScan then
 		NextSlamScan = Time + .5
@@ -345,6 +346,94 @@ hook.Add("PostDrawTranslucentRenderables", "JMOD_POSTDRAWTRANSLUCENTRENDERABLES"
 	end
 end)
 
+local function IsOnWhiteList(ent)
+	local IDwhitelist = JMod.Config.Armor.ScoutIDwhitelist or {}
+	local EntClass = ent:GetClass()
+
+	for _, class in pairs(IDwhitelist) do
+		if EntClass == class then
+
+			return true
+		elseif string.EndsWith(class, "*") and string.find(EntClass, string.TrimRight(class, "*")) then
+
+			return true
+		end
+	end
+
+	return false
+end
+
+JMod.EZscannerDangers = {}
+local NextDangerScan, KnownEnts = 0, {}
+local ScanDist = 1500
+
+hook.Add("PostDrawTranslucentRenderables", "JMOD_EZDANGERSCANNING", function(bDepth, bSkybox)
+	if bSkybox then return end
+	if bDepth then return end
+
+	local Time = CurTime()
+	local ply = LocalPlayer()
+
+	if not JMod.PlyHasArmorEff(ply, "tacticalVision") then return end
+
+	local SightPos = ply:GetShootPos()
+
+	if Time > NextDangerScan then
+		NextDangerScan = Time + .5
+		KnownEnts = ents.FindInSphere(SightPos, ScanDist)
+	end
+
+	table.Empty(JMod.EZscannerDangers)
+	
+	local TraceSetup = {
+		start = SightPos,
+		endpos = SightPos + ply:GetAimVector() * ScanDist,
+		mask = MASK_OPAQUE_AND_NPCS,
+		filter = {ply}
+	}
+
+	if ply:InVehicle() then
+		table.insert(TraceSetup.filter, ply:GetVehicle())
+		if IsValid(ply:GetVehicle():GetParent()) then
+			table.insert(TraceSetup.filter, ply:GetVehicle():GetParent())
+		end
+	end
+	local SightTrace = util.TraceLine(TraceSetup)
+
+	for _, ent in ipairs(KnownEnts) do
+		if IsValid(ent) then
+			if ent.EZscannerDanger or IsOnWhiteList(ent) then
+				local TestPos = ent:LocalToWorld(ent:OBBCenter())
+				TraceSetup.endpos = TestPos
+				table.insert(TraceSetup.filter, ent)
+				local SightTrace = util.TraceLine(TraceSetup)
+				if not SightTrace.Hit then
+					local DangerInfo = TestPos:ToScreen()
+					DangerInfo.text = ent.PrintName or (ent.GetPrintName and language.GetPhrase(ent:GetPrintName())) or "???"
+					if ent.GetState and ent:GetState() == JMod.EZ_STATE_ARMED then
+						DangerInfo.danger = true
+					end
+					if DangerInfo.visible then
+						table.insert(JMod.EZscannerDangers, DangerInfo)
+					end
+				end
+			elseif ent ~= ply and ent.LookupAttachment and ent:GetAttachment(ent:LookupAttachment("eyes")) then
+				local AngPos = ent:GetAttachment(ent:LookupAttachment("eyes")) 
+				TraceSetup.endpos = AngPos.Pos
+				table.insert(TraceSetup.filter, ent)
+				local SightTrace = util.TraceLine(TraceSetup)
+				if not SightTrace.Hit then
+					local DangerInfo = AngPos.Pos:ToScreen()
+					DangerInfo.text = "Head"
+					if DangerInfo.visible then
+						table.insert(JMod.EZscannerDangers, DangerInfo)
+					end
+				end
+			end
+		end
+	end 
+end)
+
 net.Receive("JMod_LuaConfigSync", function(dataLength)
 	local Payload = net.ReadData(dataLength)
 	Payload = util.JSONToTable(util.Decompress(Payload))
@@ -357,6 +446,7 @@ net.Receive("JMod_LuaConfigSync", function(dataLength)
 	JMod.Config.QoL = table.FullCopy(Payload.QoL)
 	JMod.Config.ResourceEconomy = {MaxResourceMult = Payload.MaxResourceMult}
 	JMod.Config.Explosives = {Flashbang = Payload.Flashbang}
+	JMod.Config.Armor = {ScoutIDwhitelist = table.FullCopy(Payload.ScoutIDwhitelist)}
 
 	if tobool(net.ReadBit()) then
 		for k, v in player.Iterator() do

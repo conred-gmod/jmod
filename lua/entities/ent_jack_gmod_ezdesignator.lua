@@ -31,7 +31,7 @@ if SERVER then
 	end
 
 	function ENT:Initialize()
-		self:SetModel("models/saraphines/binoculars/binoculars_sniper/binoculars_sniper.mdl")
+		self:SetModel("models/props_combine/combine_binocular03.mdl")--"models/saraphines/binoculars/binoculars_sniper/binoculars_sniper.mdl")
 		self:PhysicsInit(SOLID_VPHYSICS)
 		self:SetMoveType(MOVETYPE_VPHYSICS)
 		self:SetSolid(SOLID_VPHYSICS)
