@@ -91,7 +91,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 			DoorBreachResetTimeMult = 1,
 			FragExplosions = true,
 			PropDestroyPower = 1,
-			BombOwnershipLossOnRespawn = false
+			BombOwnershipLossOnRespawn = true
 		},
 		Particles = {
 			VirusSpreadMult = 1,
@@ -111,7 +111,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 			ScroungeCooldownMult = 1,
 			ScroungeDespawnTimeMult = 1,
 			ScroungeResultAmount = 5,
-			ForceLoadAllResources = false,
+			ForceLoadAllResources = true,
 			GrowthSpeedMult = 1,
 			WaterRequirementMult = 1
 		},
@@ -128,7 +128,7 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 			NukeFlashLightEnabled = false,
 			NiceFire = true,
 			ChangePitchWithHostTimeScale = true,
-			AllowActiveItemsInInventory = false,
+			AllowActiveItemsInInventory = true,
 			SeasonalEventsEnabled = true,
 			InventorySizeMult = 1
 		},
@@ -2670,19 +2670,19 @@ function JMod.InitGlobalConfig(forceNew, configToApply)
 	-- This is to make sure the ammo types are saved on config reload
 	JMod.LoadAmmoTable(JMod.AmmoTable)
 
-	print("JMOD: updating recipes...")
-	for k, v in ents.Iterator() do
-		if(IsValid(v) and v.UpdateConfig)then
-			v:UpdateConfig()
-		end
-	end
-
 	SetArmorPlayerModelModifications()
 
 	print("JMOD: lua config file loaded")
 	if SERVER then
 		print("JMOD: syncing lua config's")
 		JMod.LuaConfigSync(true)
+		print("JMOD: updating recipes...")
+		JMod.CraftablesSync()
+		for k, v in ents.Iterator() do
+			if(IsValid(v) and v.UpdateConfig)then
+				v:UpdateConfig()
+			end
+		end
 	end
 	if not forceNew then
 		print("-----Config Info-----")

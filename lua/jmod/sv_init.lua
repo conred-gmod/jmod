@@ -9,21 +9,10 @@ local function JackaSpawnHook(ply, transition)
 	if transition then return end
 	ply.EZragdoll = nil
 	ply.JModFriends = ply.JModFriends or {}
-
-	ply.EZarmor = ply.EZarmor or {
-		items = {},
-		speedFrac = nil,
-		effects = {},
-		mskmat = nil,
-		sndlop = nil,
-		suited = false,
-		bodygroups = nil,
-		totalWeight = 0
-	}
-
 	ply.JModInv = ply.JModInv or table.Copy(JMod.DEFAULT_INVENTORY)
 
 	JMod.EZarmorSync(ply)
+	JMod.CalcSpeed(ply)
 	ply.EZoxygen = 100
 	ply.EZbleeding = 0
 	JMod.SyncBleeding(ply)
@@ -88,8 +77,12 @@ end
 
 hook.Add("PlayerSpawn", "JMod_PlayerSpawn", JackaSpawnHook)
 hook.Add("PlayerInitialSpawn", "JMod_PlayerInitialSpawn", function(ply, transit) 
-	JackaSpawnHook(ply, transit) 
-	JMod.LuaConfigSync(false) 
+	JackaSpawnHook(ply, transit)
+	timer.Simple(0, function()
+		if not IsValid(ply) then return end
+		JMod.LuaConfigSync(true, ply)
+		JMod.CraftablesSync(ply) 
+	end)
 end)
 
 hook.Add("PlayerSelectSpawn", "JMod_SleepingBagSpawn", function(ply, transition) 
@@ -860,8 +853,8 @@ hook.Add("Think", "JMOD_SERVER_THINK", function()
 					end
 				end
 
-				JMod.CalcSpeed(playa)
-				JMod.EZarmorSync(playa)
+				--JMod.CalcSpeed(playa)
+				--JMod.EZarmorSync(playa)
 			end
 		end
 	end
@@ -900,33 +893,58 @@ hook.Add("Think", "JMOD_SERVER_THINK", function()
 			WindChange:Normalize()
 		end
 	end
-
-	---
-	if NextSync < Time then
-		NextSync = Time + 30
-		JMod.LuaConfigSync(false)
-	end
 end)
 
-function JMod.LuaConfigSync(copyArmorOffsets)
+function JMod.LuaConfigSync(copyArmorOffsets, ply)
 	local ToSend = {}
-	ToSend.ArmorOffsets = (JMod.LuaConfig and JMod.LuaConfig.ArmorOffsets) or {}
 	ToSend.AltFunctionKey = JMod.Config.General.AltFunctionKey
 	ToSend.WeaponSwayMult = JMod.Config.Weapons.SwayMult
 	ToSend.Blackhole = JMod.Config.Machines.Blackhole
-	ToSend.CopyArmorOffsets = copyArmorOffsets or false
 	ToSend.QoL = table.FullCopy(JMod.Config.QoL)
 	ToSend.MaxResourceMult = JMod.Config.ResourceEconomy.MaxResourceMult
 	ToSend.Flashbang = JMod.Config.Explosives.Flashbang
 	ToSend.ScoutIDwhitelist = table.FullCopy(JMod.Config.Armor.ScoutIDwhitelist)
+	ToSend.ArmorOffsets = (copyArmorOffsets and JMod.LuaConfig and JMod.LuaConfig.ArmorOffsets) or nil
+	
 	net.Start("JMod_LuaConfigSync")
 		net.WriteData(util.Compress(util.TableToJSON(ToSend)))
-	net.Broadcast()
+	if ply then 
+		net.Send(ply)
+	else
+		net.Broadcast()
+	end
 end
+
+function JMod.CraftablesSync(ply)
+	local ToSend = {}
+	ToSend.Craftables = table.FullCopy(JMod.Config.Craftables)
+	ToSend.Orderables = table.FullCopy(JMod.Config.RadioSpecs.AvailablePackages)
+
+	net.Start("JMod_LuaConfigSync")
+		net.WriteData(util.Compress(util.TableToJSON(ToSend)))
+	if ply and IsValid(ply) then
+		net.Send(ply)
+	else
+		net.Broadcast()
+	end
+end
+
+local PlyConfigRequestTimes = {}
+
+net.Receive("JMod_LuaConfigSync", function(len, ply)
+	local Time = CurTime()
+
+	if PlyConfigRequestTimes[ply] and PlyConfigRequestTimes[ply] > Time then return end
+	PlyConfigRequestTimes[ply] = Time + 5
+
+	JMod.LuaConfigSync(false, ply)
+	JMod.CraftablesSync(ply)
+end)
 
 concommand.Add("jmod_force_lua_config_sync", function(ply, cmd, args)
 	if ply and not ply:IsSuperAdmin() then return end
 	JMod.LuaConfigSync(true)
+	JMod.CraftablesSync()
 end, nil, "Manually forces the Lua Config for Jmod to sync.")
 
 concommand.Add("jacky_trace_debug", function(ply)

@@ -1,5 +1,18 @@
 ﻿player_manager.AddValidModel("JMod_HazMat", "models/bloocobalt/splinter cell/chemsuit_cod.mdl")
 player_manager.AddValidHands("JMod_HazMat", "models/bloocobalt/splinter cell/chemsuit_v.mdl", 0, "00000000")
+
+-- default armor data
+JMod.DEFAULT_ARMOR = {
+	items = {},
+	speedFrac = nil,
+	effects = {},
+	mskmat = nil,
+	sndlop = nil,
+	suited = false,
+	bodygroups = nil,
+	totalWeight = 0
+}
+
 --[[ ArmorSlots
 
 	-- if damage is locational (bullets):
@@ -1298,13 +1311,7 @@ if CLIENT then
 	end, "First argument is action, second arg is slot to apply the action to")
 end
 
--- Debug
---[[
-for _, ply in player.Iterator() do
-	ply.NextEZarmorTableCopy=0
-end
---]]
-LoadAdditionalArmor()
+--LoadAdditionalArmor()
 
 -- Sounds
 sound.Add({	name = "JMod_ZipLine_Clip",
