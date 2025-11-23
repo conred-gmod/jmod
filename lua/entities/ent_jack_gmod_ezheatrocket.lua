@@ -14,6 +14,7 @@ ENT.EZrackAngles = Angle(0, 0, 0)
 ENT.EZrocket = true
 ---
 local STATE_BROKEN, STATE_OFF, STATE_ARMED, STATE_LAUNCHED = -1, 0, 1, 2
+local DETONATION_SPEED = 600
 
 function ENT:SetupDataTables()
 	self:NetworkVar("Int", 0, "State")
@@ -88,9 +89,7 @@ if SERVER then
 				self:EmitSound("Canister.ImpactHard")
 			end
 
-			local DetSpd = 300
-
-			if (data.Speed > DetSpd) and (self:GetState() == STATE_LAUNCHED) then
+			if (data.Speed > DETONATION_SPEED) and (self:GetState() >= STATE_ARMED) then
 				self:Detonate()
 
 				return
@@ -298,13 +297,17 @@ if SERVER then
 		return true
 	end
 elseif CLIENT then
-	function ENT:Initialize()
+	local function MakeModel(self)
 		self.Mdl = ClientsideModel("models/jmod/explosives/missile/missile_patriot.mdl")
 		self.Mdl:SetSkin(2)
 		self.Mdl:SetModelScale(.45, 0)
 		self.Mdl:SetPos(self:GetPos())
 		self.Mdl:SetParent(self)
 		self.Mdl:SetNoDraw(true)
+	end
+
+	function ENT:Initialize()
+		MakeModel(self)
 	end
 
 	function ENT:Think()
@@ -337,9 +340,13 @@ elseif CLIENT then
 		local Pos, Ang, Dir = self:GetPos(), self:GetAngles(), self:GetRight()
 		local Time = CurTime()
 		Ang:RotateAroundAxis(Ang:Up(), 90)
-		self.Mdl:SetRenderOrigin(Pos + Ang:Up() * 1.5 - Ang:Right() * 0 - Ang:Forward() * 1)
-		self.Mdl:SetRenderAngles(Ang)
-		self.Mdl:DrawModel()
+		if not IsValid(self.Mdl) then 
+			MakeModel(self) 
+		else
+			self.Mdl:SetRenderOrigin(Pos + Ang:Up() * 1.5 - Ang:Right() * 0 - Ang:Forward() * 1)
+			self.Mdl:SetRenderAngles(Ang)
+			self.Mdl:DrawModel()
+		end
 
 		if self:GetState() == STATE_LAUNCHED then
 			self.BurnoutTime = self.BurnoutTime or Time + 1
@@ -356,8 +363,8 @@ elseif CLIENT then
 	end
 
 	function ENT:OnRemove()
-		if self.Mdl then
-			self.Mdl:Remove()
+		if IsValid(self.Mdl) then
+			SafeRemoveEntity(self.Mdl)
 		end
 	end
 

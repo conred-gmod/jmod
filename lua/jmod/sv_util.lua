@@ -1,8 +1,16 @@
-﻿-- this causes an object to rotate to point forward while moving, like a dart
+﻿-- Material types that can be mined for sand, with speed multipliers
+JMod.SandTypes = {
+	[MAT_DIRT] = 1,
+	[MAT_SAND] = 1.5,
+	[MAT_SNOW] = .5,
+	[MAT_GRASS] = .75
+}
+
+-- this causes an object to rotate to point forward while moving, like a dart
 function JMod.AeroDrag(ent, forward, mult, spdReq)
-	--if constraint.HasConstraints(ent) then return end
 	if constraint.FindConstraint(ent, "Weld") then return end
 	if ent:IsPlayerHolding() then return end
+
 	local Phys = ent:GetPhysicsObject()
 	if not IsValid(Phys) then return end
 	local Vel = Phys:GetVelocity()
@@ -14,11 +22,14 @@ function JMod.AeroDrag(ent, forward, mult, spdReq)
 
 	if Spd < spdReq then return end
 	mult = mult or 1
-	local Pos, Mass = Phys:LocalToWorld(Phys:GetMassCenter()), Phys:GetMass()
+	ent.JMod_PhysMassCenter = ent.JMod_PhysMassCenter or Phys:GetMassCenter()
+	local Pos, Mass = Phys:LocalToWorld(ent.JMod_PhysMassCenter), Phys:GetMass()
 	Phys:ApplyForceOffset(Vel * Mass / 6 * mult, Pos + forward)
 	Phys:ApplyForceOffset(-Vel * Mass / 6 * mult, Pos - forward)
-	Phys:AddAngleVelocity(-Phys:GetAngleVelocity() * Mass / 1000)
-	ent.LastAreoDragAmount = mult
+	local AngVel = Phys:GetAngleVelocity()
+	Phys:AddAngleVelocity(-AngVel * Mass / 1000)
+
+	ent.JMod_LastAreoDragAmount = mult
 end
 
 -- this causes an object to rotate to point and fly to a point you give it
@@ -160,9 +171,32 @@ function JMod.ShouldAllowControl(self, ply, neutral)
 	return (engine.ActiveGamemode() ~= "sandbox" or ply:Team() ~= TEAM_UNASSIGNED) and ply:Team() == EZowner:Team()
 end
 
+-- This is for providing a whitelist of point entities that should be targetable
+JMod.TargetableClasses = {
+	["npc_bullseye"] = true
+}
+
+local function DealWithNPCs(self, ent, vehiclesOnly, peaceWasNeverAnOption)
+	local Class = ent:GetClass()
+	if self.WhitelistedNPCs and table.HasValue(self.WhitelistedNPCs, Class) then return true end
+	if self.BlacklistedNPCs and table.HasValue(self.BlacklistedNPCs, Class) then return false end
+	if not IsValid(self.EZowner) then return ent:Health() > 0 end
+
+	if ent.Disposition and (ent:Disposition(self.EZowner) == D_HT) and ent.GetMaxHealth and ent.Health then
+		if vehiclesOnly then
+			return ent:GetMaxHealth() > 100 and ent:Health() > 0
+		else
+			return ent:GetMaxHealth() > 0 and ent:Health() > 0
+		end
+	else
+		return peaceWasNeverAnOption or false
+	end
+end
+
 function JMod.ShouldAttack(self, ent, vehiclesOnly, peaceWasNeverAnOption)
 	if not IsValid(ent) then return false end
 	if ent:IsWorld() then return false end
+	if not JMod.TargetableClasses[ent:GetClass()] and not IsValid(ent:GetPhysicsObject()) then return false end
 	local SelfOwner = JMod.GetEZowner(self)
 
 	local Override = hook.Run("JMod_ShouldAttack", self, ent, vehiclesOnly, peaceWasNeverAnOption)
@@ -182,23 +216,17 @@ function JMod.ShouldAttack(self, ent, vehiclesOnly, peaceWasNeverAnOption)
 			if ent.Health > 0 then return true end
 		end
 	elseif ent:IsNPC() then
-		local Class = ent:GetClass()
-		if self.WhitelistedNPCs and table.HasValue(self.WhitelistedNPCs, Class) then return true end
-		if self.BlacklistedNPCs and table.HasValue(self.BlacklistedNPCs, Class) then return false end
-		if not IsValid(self.EZowner) then return ent:Health() > 0 end
-
-		if ent.Disposition and (ent:Disposition(self.EZowner) == D_HT) and ent.GetMaxHealth and ent.Health then
-			if vehiclesOnly then
-				return ent:GetMaxHealth() > 100 and ent:Health() > 0
-			else
-				return ent:GetMaxHealth() > 0 and ent:Health() > 0
-			end
-		else
-			return peaceWasNeverAnOption or false
-		end
+		return DealWithNPCs(self, ent, vehiclesOnly, peaceWasNeverAnOption)
 	elseif ent:IsVehicle() then
-		PlayerToCheck = ent:GetDriver()
-		InVehicle = true
+		local Driver = ent:GetDriver()
+		if IsValid(Driver) then
+			if Driver:IsNPC() then
+				return DealWithNPCs(self, Driver, vehiclesOnly, peaceWasNeverAnOption)
+			else
+				PlayerToCheck = Driver
+				InVehicle = true
+			end
+		end
 	elseif (ent.LVS and not(ent.ExplodedAlready)) then
 		if ent.GetDriver and IsValid(ent:GetDriver()) then
 			PlayerToCheck = ent:GetDriver()
@@ -361,63 +389,54 @@ function JMod.ResourceEffect(typ, fromPoint, toPoint, amt, spread, scale, upSpee
 	end
 end
 
-function JMod.EZprogressTask(ent, pos, deconstructor, task, mult)
+function JMod.EZprogressMining(ent, pos, deconstructor, mult, surfaceMat)
 	mult = mult or 1
 	local Time = CurTime()
-
+	
 	if not IsValid(ent) then return "Invalid Ent" end
-
-	local CancelTaskMessage = hook.Run("JMod_EZprogressTask", ent, pos, deconstructor, task, mult)
-
+	
+	local CancelTaskMessage = hook.Run("JMod_EZprogressMining", ent, pos, deconstructor, mult)
+	
 	if CancelTaskMessage ~= nil then
-
 		return CancelTaskMessage
 	end
-
-	if task == "mining" then
-		local DepositKey = JMod.GetDepositAtPos(ent, pos)
-		local DepositInfo = JMod.NaturalResourceTable[DepositKey]
-		if DepositInfo and ent.SetResourceType then
-			local NewType = DepositInfo.typ
-			if ent.GetResourceType and (ent:GetResourceType() ~= NewType) then
-				ent:SetNW2Float("EZminingProgress", 0) -- No you don't
-			end 
-			ent:SetResourceType(NewType)
-		end
+	
+	local DepositKey = JMod.GetDepositAtPos(ent, pos)
+	local DepositInfo = JMod.NaturalResourceTable[DepositKey]
+	if DepositInfo and ent.SetResourceType then
+		local NewType = DepositInfo.typ
+		if ent.GetResourceType and (ent:GetResourceType() ~= NewType) then
+			ent:SetNW2Float("EZminingProgress", 0) -- No you don't
+		end 
+		ent:SetResourceType(NewType)
+	end
+	
+	-- Check if we can mine sand from this surface
+	local SandMiningModifier = surfaceMat and JMod.SandTypes[surfaceMat]
+	
+	if ent.EZpreviousMiningPos and ent.EZpreviousMiningPos:Distance(pos) > 200 then
+		ent:SetNW2Float("EZminingProgress", 0)
+		ent.EZpreviousMiningPos = nil
+	end
+	if ent:GetNW2Float("EZcancelminingTime", 0) <= Time then
+		ent:SetNW2Float("EZminingProgress", 0)
+		ent.EZpreviousMiningPos = nil
+	end
+	ent:SetNW2Float("EZcancelminingTime", Time + 5)
+	ent.EZpreviousMiningPos = pos
+	
+	local Prog = ent:GetNW2Float("EZminingProgress", 0)
+	local AddAmt = math.random(15, 25) * mult * JMod.Config.ResourceEconomy.ExtractionSpeed
+	
+	ent:SetNW2Float("EZminingProgress", math.Clamp(Prog + AddAmt, 0, 100))
+	
+	-- Check if mining is complete first (before checking >= 10)
+	if Prog >= 100 then
+		local AmtToProduce
+		local ResourceType
 		
-		if ent.EZpreviousMiningPos and ent.EZpreviousMiningPos:Distance(pos) > 200 then
-			ent:SetNW2Float("EZminingProgress", 0)
-			ent.EZpreviousMiningPos = nil
-		end
-		if ent:GetNW2Float("EZcancelminingTime", 0) <= Time then
-			ent:SetNW2Float("EZminingProgress", 0)
-			ent.EZpreviousMiningPos = nil
-		end
-		ent:SetNW2Float("EZcancelminingTime", Time + 5)
-		ent.EZpreviousMiningPos = pos
-
-		local Prog = ent:GetNW2Float("EZminingProgress", 0)
-		local AddAmt = math.random(15, 25) * mult * JMod.Config.ResourceEconomy.ExtractionSpeed
-
-		ent:SetNW2Float("EZminingProgress", math.Clamp(Prog + AddAmt, 0, 100))
-
-		if (Prog >= 10) and not(DepositInfo) then
-			ent:SetNW2Float("EZminingProgress", 0)
-			ent.EZpreviousMiningPos = nil
-			local NearestGoodDeposit = JMod.GetDepositAtPos(ent, pos, 3)
-			local NearestGoodDepositInfo = JMod.NaturalResourceTable[NearestGoodDeposit]
-			if NearestGoodDepositInfo then
-				net.Start("JMod_ResourceScanner")
-					net.WriteEntity(ent)
-					net.WriteTable({NearestGoodDepositInfo})
-				net.Broadcast()
-				return NearestGoodDepositInfo.typ .. " nearby"
-			else
-				return "nothing of value nearby"
-			end
-		elseif Prog >= 100 then
-			local AmtToProduce
-
+		if DepositInfo then
+			-- Mining a deposit
 			if DepositInfo.rate then
 				local Rate = DepositInfo.rate
 				AmtToProduce = Rate * Prog
@@ -429,25 +448,87 @@ function JMod.EZprogressTask(ent, pos, deconstructor, task, mult)
 				end
 				JMod.DepleteNaturalResource(DepositKey, AmtToProduce)
 			end
+			ResourceType = DepositInfo.typ
+		elseif SandMiningModifier then
+			-- Mining sand/dirt
+			AmtToProduce = 25 * SandMiningModifier
+			ResourceType = JMod.EZ_RESOURCE_TYPES.SAND
+		else
+			-- Nothing to mine
+			return nil
+		end
 
-			local SpawnPos = ent:WorldToLocal(pos + Vector(0, 0, 8))
-			JMod.MachineSpawnResource(ent, DepositInfo.typ, AmtToProduce, SpawnPos, Angle(0, 0, 0), SpawnPos, 100)
-			ent:SetNW2Float("EZminingProgress", 0)
-			ent.EZpreviousMiningPos = nil
-			JMod.ResourceEffect(DepositInfo.typ, pos, nil, 1, 1, 1, 5)
-			util.Decal("EZgroundHole", pos + Vector(0, 0, 10), pos + Vector(0, 0, -10))
-			--
+		local SpawnPos = ent:WorldToLocal(pos + Vector(0, 0, 8))
+		JMod.MachineSpawnResource(ent, ResourceType, AmtToProduce, SpawnPos, Angle(0, 0, 0), SpawnPos, 100)
+		ent:SetNW2Float("EZminingProgress", 0)
+		ent.EZpreviousMiningPos = nil
+		JMod.ResourceEffect(ResourceType, pos, nil, 1, 1, 1, 5)
+		util.Decal("EZgroundHole", pos + Vector(0, 0, 10), pos + Vector(0, 0, -10))
+
+		if DepositInfo then
 			net.Start("JMod_ResourceScanner")
 				net.WriteEntity(ent)
 				net.WriteTable({DepositInfo})
 			net.Broadcast()
+		end
 
+		if ent.SetResourceType then
 			ent:SetResourceType("")
+		end
+	elseif not(DepositInfo) then
+		ent:SetNW2Float("EZminingProgress", 0)
+		ent.EZpreviousMiningPos = nil
+		
+		-- Check for nearby valuable deposits first
+		local NearestGoodDeposit = JMod.GetDepositAtPos(ent, pos, 3)
+		local NearestGoodDepositInfo = JMod.NaturalResourceTable[NearestGoodDeposit]
+		
+		-- Check if we can mine sand/dirt instead
+		if SandMiningModifier then
+			-- Mine sand instead of a deposit
+			if ent.SetResourceType then
+				ent:SetResourceType(JMod.EZ_RESOURCE_TYPES.SAND)
+			end
+			ent:SetNW2Float("EZminingProgress", 100)
+			
+			-- Also notify about nearby deposits while mining sand
+			if NearestGoodDepositInfo then
+				net.Start("JMod_ResourceScanner")
+					net.WriteEntity(ent)
+					net.WriteTable({NearestGoodDepositInfo})
+				net.Broadcast()
+				return NearestGoodDepositInfo.typ .. " nearby"
+			end
 			
 			return nil
 		end
+		
+		-- No sand mining possible, just check for nearby deposits
+		if NearestGoodDepositInfo then
+			net.Start("JMod_ResourceScanner")
+				net.WriteEntity(ent)
+				net.WriteTable({NearestGoodDepositInfo})
+			net.Broadcast()
+			return NearestGoodDepositInfo.typ .. " nearby"
+		else
+			return "nothing of value nearby"
+		end
+	end
 
-		return nil
+	return nil
+end
+
+function JMod.EZprogressTask(ent, pos, deconstructor, task, mult)
+	mult = mult or 1
+	local Time = CurTime()
+
+	if not IsValid(ent) then return "Invalid Ent" end
+
+	local CancelTaskMessage = hook.Run("JMod_EZprogressTask", ent, pos, deconstructor, task, mult)
+
+	if CancelTaskMessage ~= nil then
+
+		return CancelTaskMessage
 	end
 
 	if ent:GetNW2Float("EZcancel"..task.."Time", 0) <= Time then
@@ -537,8 +618,9 @@ function JMod.EZprogressTask(ent, pos, deconstructor, task, mult)
 	end
 end
 
-function JMod.ConsumeNutrients(ply, amt)
+function JMod.ConsumeNutrients(ply, amt, nextEatTimeMult)
 	if not IsValid(ply) or not ply:Alive() then return false end
+	nextEatTimeMult = nextEatTimeMult or 1
 	local Time = CurTime()
 	amt = math.Round(amt)
 	--
@@ -549,15 +631,25 @@ function JMod.ConsumeNutrients(ply, amt)
 	if (ply.EZnutrition.NextEat or 0) > Time then JMod.Hint(activator, "can not eat") return false end
 	if (ply.EZnutrition.Nutrients or 0) >= 100 then JMod.Hint(ply, "nutrition filled") return false end
 	--
-	ply.EZnutrition.NextEat = Time + amt / JMod.Config.FoodSpecs.EatSpeed
+	ply.EZnutrition.NextEat = Time + (amt * nextEatTimeMult / JMod.Config.FoodSpecs.EatSpeed)
 	ply.EZnutrition.Nutrients = math.Round(ply.EZnutrition.Nutrients + amt * JMod.Config.FoodSpecs.ConversionEfficiency)
 
 	local result = hook.Run("JMod_ConsumeNutrients", ply, amt)
 
 	ply:PrintMessage(HUD_PRINTCENTER, "nutrition: " .. ply.EZnutrition.Nutrients .. "/100")
+
+	if ply.EZvirus and ply.EZvirus.Severity > 1 then
+		if ply.EZvirus.InfectionWarned then
+			ply:PrintMessage(HUD_PRINTCENTER, "immune system boosted")
+		end
+
+		ply.EZvirus.Severity = math.Clamp(ply.EZvirus.Severity - 10, 1, 9e9)
+	end
+	
 	return true
 end
 
+-- Example hook for DarkRP energy compatibility
 hook.Add("JMod_ConsumeNutrients", "DarkRP_EnergyCompat", function(ply, amt)
 	if ply.getDarkRPVar and ply.setDarkRPVar and ply:getDarkRPVar("energy") then
 		local Old = ply:getDarkRPVar("energy")
@@ -565,14 +657,61 @@ hook.Add("JMod_ConsumeNutrients", "DarkRP_EnergyCompat", function(ply, amt)
 	end
 end)
 
+function JMod.ConsumeAlcohol(ply, amt, drunkMult, nextDrinkTimeMult)
+	if not IsValid(ply) or not ply:Alive() then return false end
+	nextDrinkTimeMult = nextDrinkTimeMult or 1
+	local Time = CurTime()
+	amt = math.Round(amt)
+	--
+	ply.EZalcohol = ply.EZalcohol or {
+		NextDrink = 0, -- Stop people from gulping down to much, enjoy your drinks
+		Tolerance = 1, -- The threshold at which you start to feel the effects of alcohol
+		Alcohol = 0, -- The 'good' benefits of alcohol [0 - 100]
+		Drunk = 0 -- The 'bad' effects of alcohol [0 - 100]
+	}
+	if (ply.EZalcohol.NextDrink or 0) > Time then JMod.Hint(activator, "can not drink") return false end
+	if (ply.EZalcohol.Alcohol or 0) >= 100 then JMod.Hint(ply, "alcohol filled") return false end
+	--
+	ply.EZalcohol.NextDrink = Time + (amt * nextDrinkTimeMult / JMod.Config.FoodSpecs.DrinkSpeed)
+	ply.EZalcohol.Alcohol = math.Round(ply.EZalcohol.Alcohol + amt * JMod.Config.FoodSpecs.ConversionEfficiency)
+	ply.EZalcohol.Drunk = math.Round(ply.EZalcohol.Drunk + amt * drunkMult * JMod.Config.FoodSpecs.ConversionEfficiency)
+
+	ply:PrintMessage(HUD_PRINTCENTER, "alcohol: " .. ply.EZalcohol.Alcohol .. "/100")
+	return true
+end
+
+function JMod.GetPlayerAlcoholMult(ply)
+	if not IsValid(ply) or not ply:Alive() then return 1 end
+	local EZalcohol = ply.EZalcohol
+
+	if not EZalcohol then return 1 end
+
+	local Alcohol = EZalcohol.Alcohol or 0
+	local Drunk = EZalcohol.Drunk or 0
+	local Tolerance = EZalcohol.Tolerance or 1
+
+	local DrunkEffect = Drunk / (150 * Tolerance)
+    local AlcoholEffect = Alcohol / (100 * math.sqrt(Tolerance))
+    
+    return 1 + AlcoholEffect - DrunkEffect
+end
+
+local function GetPlayerHealthMult(ply)
+	if not(IsValid(ply) and ply:IsPlayer() and ply:Alive()) then return 1 end
+	local PlyMaxHealth = ply:GetMaxHealth()
+	local HealthDiff = math.Clamp(ply:Health() - PlyMaxHealth, 0, PlyMaxHealth * 2)
+	local HealthMult = math.Round(HealthDiff ^ 1.2 / (PlyMaxHealth), 2)
+
+	return HealthMult
+end
+
 function JMod.GetPlayerStrength(ply)
 	if not(IsValid(ply) and ply:IsPlayer() and ply:Alive()) then return 1 end
-	local PlyHealth = ply:Health()
-	local PlyMaxHealth = ply:GetMaxHealth()
-	local HealthDiff = math.Clamp(PlyHealth - PlyMaxHealth, 0, PlyMaxHealth * 2)
+	local HealthMult = GetPlayerHealthMult(ply)
+	local AlcoholMult = JMod.GetPlayerAlcoholMult(ply)
 
 	--jprint(1 + (math.max(PlyHealth - PlyMaxHealth, 0) ^ 1.2 / (PlyMaxHealth)) * JMod.Config.General.HandGrabStrength)
-	return 1 + math.Round(HealthDiff ^ 1.2 / (PlyMaxHealth), 2) * JMod.Config.General.HandGrabStrength
+	return 1 + HealthMult * AlcoholMult * JMod.Config.General.HandGrabStrength
 end
 
 function JMod.DebugArrangeEveryone(ply, mult)

@@ -90,7 +90,7 @@ if(SERVER)then
 		local ItemInfo=self.Craftables[itemName]
 
 		if(JMod.HaveResourcesToPerformTask(nil,nil,ItemInfo.craftingReqs,self))then
-			local override, msg=hook.Run("JMod_CanWorkbenchBuild", ply, workbench, itemName)
+			local override, msg=hook.Run("JMod_CanWorkbenchBuild", ply, self, itemName)
 			if override == false then
 				ply:PrintMessage(HUD_PRINTCENTER,msg or "cannot build")
 				return
@@ -105,7 +105,7 @@ if(SERVER)then
 								if(i<BuildSteps)then
 									sound.Play("snds_jack_gmod/ez_tools/"..math.random(1,27)..".ogg",Pos,60,math.random(80,120))
 								else
-									JMod.BuildRecipe(ItemInfo.results, ply, Pos, Ang, ItemInfo.skin)
+									JMod.BuildRecipe(ItemInfo.results, self, ply, Pos, Ang, ItemInfo.skin)
 									JMod.BuildEffect(Pos)
 									self:ConsumeElectricity(8)
 									self:SetGas(math.Clamp(self:GetGas()-6,0,self.MaxGas))

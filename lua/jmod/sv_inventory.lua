@@ -64,7 +64,7 @@ function JMod.GetItemVolumeWeight(ent, amt)
 			Vol = X * Y * Z
 		end
 		Vol = ent.JModEZstorableVolume or math.Round(Vol / JMod.VOLUMEDIV, 2)
-		Mass = math.ceil(Phys:GetMass())
+		Mass = ent.JModEZstorableMass or math.ceil(Phys:GetMass())
 
 		return Vol, Mass
 	end
@@ -107,6 +107,8 @@ function JMod.UpdateInv(invEnt, noplace, transfer, emergancyNetwork)
 
 	local jmodinvfinal = table.Copy(JMod.DEFAULT_INVENTORY)
 	jmodinvfinal.maxVolume = Capacity
+
+	local OldWeight = invEnt.JModInv.weight
 
 	for k, iteminfo in ipairs(invEnt.JModInv.items) do
 		if (Capacity > 0) and JMod.IsEntContained(iteminfo.ent, invEnt) and (iteminfo.ent:EntIndex() ~= -1) then
@@ -157,6 +159,10 @@ function JMod.UpdateInv(invEnt, noplace, transfer, emergancyNetwork)
 	end
 
 	invEnt.JModInv = jmodinvfinal
+
+	if OldWeight ~= jmodinvfinal.weight then
+		JMod.CalcSpeed(invEnt)
+	end
 	if not(invEnt:IsPlayer() or invEnt.KeepJModInv) and table.IsEmpty(invEnt.JModInv.EZresources) and table.IsEmpty(invEnt.JModInv.items) then
 		invEnt.JModInv = nil
 	end
@@ -180,6 +186,13 @@ function JMod.AddToInventory(invEnt, target, noUpdate)
 	if Capacity <= 0 then return false end
 	local AddingResource = istable(target)
 	if not(AddingResource) and (target:IsPlayer() or not(IsActiveItemAllowed(target)) or (target:EntIndex() == -1)) then return false end -- Open up! The fun police are here!
+	
+	-- Allow hooks to control inventory addition
+	if not(AddingResource) then
+		local ply = invEnt:IsPlayer() and invEnt or nil
+		local hookResult = hook.Run("JMod_CanGrabInventory", ply, target)
+		if hookResult == false then return false end
+	end
 
 	if JMod.IsEntContained(target) then
 		JMod.RemoveFromInventory(target:GetNW2Entity("EZInvOwner", NULL), target, nil, false, true)
@@ -240,7 +253,8 @@ function JMod.AddToInventory(invEnt, target, noUpdate)
 		--if invEnt:GetPersistent() then
 		--	target:SetPersistent(true)
 		--end
-		table.insert(jmodinv.items, {name = target.PrintName or target:GetModel(), ent = target, vol = JMod.GetItemVolumeWeight(target)})
+		local Vol, Mass = JMod.GetItemVolumeWeight(target)
+		table.insert(jmodinv.items, {name = target.PrintName or target:GetModel(), ent = target, vol = Vol})
 
 		local Children = target:GetChildren()
 		if Children then
@@ -251,6 +265,10 @@ function JMod.AddToInventory(invEnt, target, noUpdate)
 				v:SetNotSolid(true)
 			end
 		end
+
+		target:CallOnRemove("JMod_RemoveFromInventory", function()
+			JMod.RemoveFromInventory(invEnt, target, nil, false)
+		end)
 	end
 
 	invEnt.JModInv = jmodinv
@@ -340,6 +358,7 @@ function JMod.RemoveFromInventory(invEnt, target, pos, noUpdate, transfer)
 					v:SetNotSolid(v.JModWasNoSolid or false)
 				end
 			end
+			target:RemoveCallOnRemove("JMod_RemoveFromInventory")
 		end
 	end
 
@@ -380,11 +399,48 @@ local pickupWhiteList = {
 	["prop_physics_multiplayer"] = true
 }
 
-local CanPickup = function(ent)
+local pickupBlockList = {
+	["prop_door_rotating"] = true,
+	["func_door"] = true,
+	["func_door_rotating"] = true,
+	["func_movelinear"] = true,
+	["func_tracktrain"] = true,
+	["func_tanktrain"] = true,
+	["func_train"] = true
+}
+
+--[[
+	Hook: JMod_CanGrabInventory
+	Description: Called when a player attempts to pick up an entity into their inventory
+	Parameters:
+		ply (Player) - The player attempting to grab the item (may be nil)
+		ent (Entity) - The entity being grabbed
+	Returns:
+		boolean or nil - Return true to allow, false to block, nil to use default behavior
+	
+	Example:
+		hook.Add("JMod_CanGrabInventory", "MyAddon_BlockCustomItems", function(ply, ent)
+			if ent:GetClass() == "my_special_entity" then
+				return false -- Block picking up this entity
+			end
+			-- Return nil to allow default behavior
+		end)
+--]]
+
+local CanPickup = function(ent, ply)
 	if not(IsValid(ent)) then return false end
 	if not(ent.JModEZstorable or ent.IsJackyEZresource) then return pickupWhiteList[ent:GetClass()] or false end
 	if ent:IsNPC() or ent:IsPlayer() or ent:IsWorld() then return false end
-	if string.find("func_", ent:GetClass()) then return false end
+	
+	-- Block door entities and other func_ entities
+	if pickupBlockList[ent:GetClass()] then return false end
+	if string.find(ent:GetClass(), "func_") then return false end
+	if string.find(ent:GetClass(), "door") then return false end
+	
+	-- Call hook to allow other addons to control pickup
+	local hookResult = hook.Run("JMod_CanGrabInventory", ply, ent)
+	if hookResult ~= nil then return hookResult end
+	
 	if CLIENT then return true end
 	if IsValid(ent:GetPhysicsObject()) and (ent:GetPhysicsObject():IsMotionEnabled()) then return true end
 
@@ -569,7 +625,7 @@ function JMod.EZ_GrabItem(ply, cmd, args)
 		JMod.OpenEntityInventory(TargetEntity, ply)
 		sound.Play("snd_jack_clothequip.ogg", ply:GetPos(), 50, math.random(90, 110))
 
-	elseif not(TargetEntity:IsConstrained()) and CanPickup(TargetEntity) then
+	elseif not(TargetEntity:IsConstrained()) and CanPickup(TargetEntity, ply) then
 		JMod.UpdateInv(ply)
 		local RoomLeft = math.floor((ply.JModInv.maxVolume) - (ply.JModInv.volume))
 		if RoomLeft > 0 then
@@ -631,6 +687,7 @@ end
 function JMod.EZ_Open_Inventory(ply)
 	JMod.Hint(ply, "scrounge")
 	JMod.UpdateInv(ply)
+	JMod.EZarmorSync(ply)
 	net.Start("JMod_Inventory")
 		net.WriteString(ply:GetModel())
 		net.WriteTable(ply.JModInv)

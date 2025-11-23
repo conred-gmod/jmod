@@ -77,6 +77,7 @@ function JMod.EZarmorSync(ply)
 
 	net.Start("JMod_EZarmorSync")
 		net.WriteEntity(ply)
+		net.WriteBool(false)
 		net.WriteTable(ply.EZarmor)
 	net.Broadcast()
 end
@@ -163,7 +164,7 @@ local function GetProtectionFromSlot(ply, slot, dmg, dmgAmt, protectionMul, shou
 									end
 
 									armorData.dur = armorData.dur - ArmorDmgAmt
-
+									
 									if armorData.dur < ArmorInfo.dur * .25 then
 										JMod.EZarmorWarning(ply, "armor piece is almost destroyed!")
 									end
@@ -179,6 +180,13 @@ local function GetProtectionFromSlot(ply, slot, dmg, dmgAmt, protectionMul, shou
 										Protection = 0
 									end
 								end
+
+								net.Start("JMod_EZarmorSync")
+									net.WriteEntity(ply)
+									net.WriteBool(true)
+									net.WriteString(id)
+									net.WriteFloat(armorData.dur)
+								net.Send(ply)
 							end
 
 							break
@@ -388,10 +396,11 @@ function JMod.RemoveAllArmor(ply)
 		JMod.RemoveArmorByID(ply, k, false)
 	end
 
-	JMod.EZarmorSync(ply)
+	--JMod.EZarmorSync(ply)
 end
 
 function JMod.CalcSpeed(ply)
+	ply.EZarmor = ply.EZarmor or table.FullCopy(JMod.DEFAULT_ARMOR)
 	local Walk, Run, TotalWeight = ply.EZoriginalWalkSpeed or 200, ply.EZoriginalRunSpeed or 400, 0
 
 	for k, v in pairs(ply.EZarmor.items) do
@@ -463,7 +472,7 @@ function JMod.RemoveArmorByID(ply, ID, broken)
 	if broken then
 		if Specs.eff and Specs.eff.explosive then
 			local FireAmt = (Info.chrg and Info.chrg.fuel and math.random(2, 4)) or 0
-			JMod.EnergeticsCookoff(ply:GetPos(), game.GetWorld(), 1, 1, 0, FireAmt)
+			JMod.EnergeticsCookoff(ply:GetPos(), nil, 1, 1, 0, FireAmt)
 		end
 	else
 		Ent = ents.Create(Specs.ent)

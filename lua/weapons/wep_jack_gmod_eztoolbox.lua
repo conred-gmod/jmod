@@ -410,7 +410,6 @@ function SWEP:BuildItem(selectedBuild)
 					else
 						local Class = BuildInfo.results
 						local StringParts = string.Explode(" ", Class)
-
 						if StringParts[1] and (StringParts[1] == "FUNC") then
 							local FuncName = StringParts[2]
 
@@ -441,6 +440,7 @@ function SWEP:BuildItem(selectedBuild)
 							Ent:SetCreator(self.Owner)
 							Ent:Spawn()
 							Ent:Activate()
+							hook.Run("JMod_OnRecipeCrafted", self.Owner, self, Ent, selectedBuild)
 							if BuildInfo.skin then
 								if istable(BuildInfo.skin) then
 									Ent:SetSkin(table.Random(BuildInfo.skin))
@@ -543,7 +543,7 @@ function SWEP:PrimaryAttack()
 						local CurAmt = Ent.UpgradeProgress[resourceType] or 0
 
 						if CurAmt < requiredAmt then
-							local ResourceContainer = JMod.FindResourceContainer(resourceType, UpgradeRate, nil, nil, self)
+							local ResourceContainer = JMod.FindResourceContainer(resourceType, 1, nil, nil, self)
 
 							if ResourceContainer then
 								self:UpgradeEntWithResource(Ent, ResourceContainer, UpgradeRate, resourceType)
@@ -793,8 +793,14 @@ end
 --
 function SWEP:OnDrop()
 	local Kit = ents.Create("ent_jack_gmod_eztoolbox")
-	Kit:SetPos(self:GetPos())
-	Kit:SetAngles(self:GetAngles())
+	local Pos, Ang = self:GetPos(), self:GetAngles()
+	if IsValid(self.EZdropper) and self.EZdropper:IsPlayer() then
+		local AimPos, AimVec = self.EZdropper:GetShootPos(), self.EZdropper:GetAimVector()
+		local PlaceTr = util.QuickTrace(AimPos, AimVec * 60, {self, self.EZdropper})
+		Pos = PlaceTr.HitPos + PlaceTr.HitNormal * 5
+	end
+	Kit:SetPos(Pos)
+	Kit:SetAngles(Ang)
 	Kit:Spawn()
 	Kit:Activate()
 

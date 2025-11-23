@@ -11,8 +11,8 @@ local function JackaSpawnHook(ply, transition)
 	ply.JModFriends = ply.JModFriends or {}
 	ply.JModInv = ply.JModInv or table.Copy(JMod.DEFAULT_INVENTORY)
 
-	JMod.EZarmorSync(ply)
 	JMod.CalcSpeed(ply)
+	JMod.EZarmorSync(ply)
 	ply.EZoxygen = 100
 	ply.EZbleeding = 0
 	JMod.SyncBleeding(ply)
@@ -283,10 +283,10 @@ function JMod.TryVirusInfectInRange(host, att, hostFaceProt, hostSkinProt)
 end
 
 local function VirusCough(ply)
-	if math.random(1, 10) == 2 then
+	local Cough = math.random(1, 10) == 10
+	if Cough then
 		JMod.TryCough(ply)
 	end
-
 	local VirusAttacker = (IsValid(ply.EZvirus.Attacker) and ply.EZvirus.Attacker) or game.GetWorld()
 	local Dmg = DamageInfo()
 	Dmg:SetDamageType(DMG_GENERIC) -- why aint this working to hazmat wearers?
@@ -299,9 +299,10 @@ local function VirusCough(ply)
 	--
 	local HostFaceProtection, HostSkinProtection = JMod.GetArmorBiologicalResistance(ply, DMG_RADIATION)
 	if (HostFaceProtection + HostSkinProtection) >= 2 then return end
-	JMod.TryVirusInfectInRange(ply, VirusAttacker, HostFaceProtection, HostSkinProtection)
 
-	if math.random(1, 10) == 10 then
+	JMod.TryVirusInfectInRange(ply, VirusAttacker, HostFaceProtection, HostSkinProtection)
+	if Cough then
+		JMod.TryCough(ply)
 		local Gas = ents.Create("ent_jack_gmod_ezvirusparticle")
 		Gas:SetPos(ply:GetPos())
 		JMod.SetEZowner(Gas, ply)
@@ -689,14 +690,10 @@ hook.Add("Think", "JMOD_SERVER_THINK", function()
 		for _, playa in PlyIterator, Playas, startingindex do
 			if playa.EZnutrition then
 				if playa:Alive() then
-					local RestMult = 1
-					if playa.JMod_IsSleeping then
-						RestMult = 2
-					end
 					local Nuts = playa.EZnutrition.Nutrients
 
 					if Nuts > 0 then
-						playa.EZnutrition.Nutrients = Nuts - 1
+						playa.EZnutrition.Nutrients = Nuts - (playa.JMod_IsSleeping and .5 or 1)
 						local Helf, Max, Nuts = playa:Health(), playa:GetMaxHealth()
 
 						if Helf < Max then
@@ -705,8 +702,8 @@ hook.Add("Think", "JMOD_SERVER_THINK", function()
 							if playa:Health() == Max then
 								playa:RemoveAllDecals()
 							end
-						elseif math.Rand(0, 1) < .75 then
-							local BoostMult = JMod.Config.FoodSpecs.BoostMult * RestMult
+						elseif math.Rand(0, 1) > .25 then
+							local BoostMult = JMod.Config.FoodSpecs.BoostMult * (playa.JMod_IsSleeping and 2 or 1)
 							local BoostedFrac = (Helf - Max) / Max
 
 							if math.Rand(0, 1) > BoostedFrac then
@@ -852,9 +849,6 @@ hook.Add("Think", "JMOD_SERVER_THINK", function()
 						end
 					end
 				end
-
-				--JMod.CalcSpeed(playa)
-				--JMod.EZarmorSync(playa)
 			end
 		end
 	end
@@ -1049,10 +1043,29 @@ hook.Add("PlayerDeath", "JMOD_SERVER_PLAYERDEATH", function(ply, inflictor, atta
 				JMod.SetPlayerModel(ply, ply.EZoriginalPlayerModel)
 				PlyRagdoll:SetModel(ply.EZoriginalPlayerModel)
 			end
+
 			local BodyGroupValues = ""
-			for i = 1, PlyRagdoll:GetNumBodyGroups() do
-				BodyGroupValues = BodyGroupValues .. tostring(PlyRagdoll:GetBodygroup(i - 1))
+						
+			-- Get player's desired bodygroups from client convar
+			local PlayerBodygroups = ply:GetInfo("cl_playerbodygroups")
+			if PlayerBodygroups and PlayerBodygroups ~= "" then
+				local values = string.Explode(" ", PlayerBodygroups)
+				for i, val in ipairs(values) do
+					local idx = i - 1 -- bodygroup indices are 0-based
+					local num = tonumber(val)
+					if num then
+						PlyRagdoll:SetBodygroup(idx, num)
+					end
+					-- If the bodygroup ID is greater than 9 we need to start using letters
+					if num > 9 then
+						BodyGroupValues = BodyGroupValues .. string.char(65 + (num - 10))
+					else
+						BodyGroupValues = BodyGroupValues .. tostring(num)
+					end
+					BodyGroupValues = BodyGroupValues
+				end
 			end
+
 			SafeRemoveEntity(PlyRagdoll)
 			EZcorpse = ents.Create("ent_jack_gmod_ezcorpse")
 			EZcorpse.DeadPlayer = ply
